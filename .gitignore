@@ -29,3 +29,9 @@ Thumbs.db
 
 # strudel-tui user data
 .strudel-tui/
+
+# Scratch / temp
+.scratch/
+
+# Test coverage
+coverage/

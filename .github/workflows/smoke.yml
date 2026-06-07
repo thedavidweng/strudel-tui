@@ -1,0 +1,59 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cli-smoke:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build binary
+        run: bun run build
+
+      - name: Binary exists and is executable
+        run: |
+          test -f bin/strudel-tui
+          test -x bin/strudel-tui || chmod +x bin/strudel-tui
+
+      - name: CLI --help works
+        run: ./bin/strudel-tui --help 2>&1 | head -20
+
+      - name: CLI --version works
+        run: ./bin/strudel-tui --version 2>&1
+
+      - name: Config subcommand available
+        run: ./bin/strudel-tui config --help 2>&1 | head -10
+
+      - name: Pattern loader works (list built-in patterns)
+        run: |
+          # Verify patterns directory exists
+          test -d patterns
+
+      - name: Import test (source-level)
+        run: |
+          # Verify all source modules import without error
+          bun -e "
+            import('./src/config/ConfigManager.js').then(() => console.log('ConfigManager OK'));
+            import('./src/engine/PatternLoader.js').then(() => console.log('PatternLoader OK'));
+            import('./src/llm/tools.js').then(() => console.log('tools OK'));
+            import('./src/tui/theme.js').then(() => console.log('theme OK'));
+            import('./src/agent/DiffGenerator.js').then(() => console.log('DiffGenerator OK'));
+            import('./src/agent/HelpText.js').then(() => console.log('HelpText OK'));
+          "

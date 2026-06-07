@@ -1,5 +1,6 @@
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,7 +27,8 @@ export class PatternLoader {
   constructor(projectRoot?: string) {
     // Resolve relative to the caller-supplied root or fall back to the
     // directory two levels up from this source file (i.e. the project root).
-    const root = projectRoot ?? resolve(import.meta.dir, '..', '..');
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    const root = projectRoot ?? resolve(thisDir, '..', '..');
     this._defaultDir = join(root, 'patterns');
   }
 

@@ -1,10 +1,9 @@
 import { defineCommand, runMain } from 'citty';
-import { render } from 'ink';
 import { readFile } from 'node:fs/promises';
-import { createElement } from 'react';
-import App from './tui/App.js';
-import ConfigWizard from './tui/ConfigWizard.js';
+import { Container, ProcessTerminal, TUI } from '@earendil-works/pi-tui';
 import { ConfigManager } from './config/ConfigManager.js';
+import { InlineConfig } from './tui/InlineConfig.js';
+import { StrudelTUI } from './tui/StrudelTUI.js';
 
 const configCmd = defineCommand({
   meta: {
@@ -66,13 +65,29 @@ const configCmd = defineCommand({
         description: 'Interactive configuration setup wizard',
       },
       run() {
-        process.stdout.write('\x1b[?1049h');
-        process.stdout.write('\x1b[2J\x1b[H');
-        const { unmount, waitUntilExit } = render(createElement(ConfigWizard));
-        const restore = () => { unmount(); process.stdout.write('\x1b[?1049l'); };
-        process.on('SIGTERM', restore);
-        process.on('SIGHUP', restore);
-        waitUntilExit().then(restore);
+        const terminal = new ProcessTerminal();
+        const tui = new TUI(terminal);
+        const configContainer = new Container();
+        tui.addChild(configContainer);
+
+        const inlineConfig = new InlineConfig('config', (saved: boolean) => {
+          tui.stop();
+          if (saved) {
+            console.log('Configuration saved.');
+          } else {
+            console.log('Configuration cancelled.');
+          }
+        });
+
+        configContainer.addChild(inlineConfig as any);
+        tui.setFocus(inlineConfig as any);
+        tui.start();
+
+        const cleanup = () => {
+          tui.stop();
+        };
+        process.on('SIGTERM', cleanup);
+        process.on('SIGHUP', cleanup);
       },
     }),
   },
@@ -163,29 +178,28 @@ const main = defineCommand({
       if (configOverrides.apiKey) console.error('[debug] API key configured');
     }
 
-    // Enter alternate screen buffer (fullscreen mode)
+    const tui = new StrudelTUI({
+      initialPattern,
+      bpm,
+      debug: args.debug,
+      configOverrides,
+    });
+
+    // Enter alternate screen buffer for fullscreen mode
     process.stdout.write('\x1b[?1049h');
     process.stdout.write('\x1b[2J\x1b[H');
 
-    const { unmount, waitUntilExit } = render(
-      createElement(App, {
-        initialPattern,
-        bpm,
-        debug: args.debug,
-        configOverrides,
-      }),
-    );
-
-    // Leave alternate screen on exit
-    const restoreScreen = () => {
-      unmount();
+    // Signal handlers for graceful shutdown
+    const shutdown = () => {
+      void tui.stop();
+      // Restore terminal screen on exit
       process.stdout.write('\x1b[?1049l');
+      process.exit(0);
     };
-    process.on('SIGTERM', restoreScreen);
-    process.on('SIGHUP', restoreScreen);
+    process.on('SIGTERM', shutdown);
+    process.on('SIGHUP', shutdown);
 
-    await waitUntilExit();
-    restoreScreen();
+    tui.start();
   },
 });
 

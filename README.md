@@ -19,7 +19,8 @@
 
 ## Features
 
-- **Interactive TUI** — Terminal UI built with [Ink](https://github.com/vadimdemedes/ink) with message history, pattern editor, and status bar
+- **Interactive TUI** — Terminal UI built with [pi-tui](https://github.com/earendil-works/pi) with message history, pattern editor, and status bar
+- **IME Support** — Full input method editor support for CJK and other complex scripts
 - **AI Agent** — Chat naturally to create and edit patterns. Supports any OpenAI-compatible API (OpenAI, DeepSeek, Qwen, Moonshot, OpenRouter, etc.)
 - **Audio Playback** — Patterns play through a hidden WebView using Strudel's WebAudio engine. No Electron, no bundled browser
 - **Pattern Engine** — Validates, transpiles, and analyzes patterns using `@strudel/core` and `@strudel/transpiler`
@@ -222,13 +223,17 @@ src/
 ├── audio/
 │   └── AudioController.ts    # Bun.WebView audio playback
 └── tui/
-    ├── App.tsx               # Main TUI layout
+    ├── App.tsx               # Main TUI layout (pi-tui component tree)
     ├── ConfigWizard.tsx       # Interactive config setup
     ├── StatusBar.tsx          # Playback state, BPM, shortcuts
     ├── MessageHistory.tsx     # Chat and system messages
     ├── PatternEditor.tsx      # Current pattern display
-    └── InputBox.tsx           # User input
+    ├── InputBox.tsx           # User input with IME support
+    ├── SlashCommandMenu.tsx   # Slash command autocomplete
+    └── MoonSpinner.tsx        # Loading spinner animation
 ```
+
+TUI components use [pi-tui](https://github.com/earendil-works/pi)'s imperative component model — each component implements `render(width): string[]` to produce terminal output. No React/JSX; components are plain classes that compose via parent-child relationships.
 
 ## Development
 
@@ -245,6 +250,13 @@ bun run build
 # Run goreleaser (requires goreleaser CLI)
 make release
 ```
+
+## Acknowledgments
+
+- **[pi-tui](https://github.com/earendil-works/pi)** — The terminal UI framework powering strudel-tui, by Mario Zechner (badlogic), Armin Ronacher (mitsuhiko), and contributors. MIT License.
+- **[Kimi Code](https://github.com/MoonshotAI/kimi-code)** (PI Agent) — By Moonshot AI. The TUI architecture, component patterns, and input handling design are heavily referenced from Kimi Code. MIT License.
+- **[Strudel](https://strudel.cc)** — The live coding music framework that strudel-tui is built on.
+- **[Tidal Cycles](https://tidalcycles.org)** — The pattern language that inspired Strudel.
 
 ## License
 

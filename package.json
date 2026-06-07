@@ -15,19 +15,21 @@
     "postinstall": "node scripts/patch-kabelsalat.cjs"
   },
   "dependencies": {
+    "@earendil-works/pi-tui": "^0.78.1",
     "@kabelsalat/web": "^0.4.1",
     "@strudel/core": "latest",
     "@strudel/mini": "latest",
     "@strudel/transpiler": "latest",
+    "chalk": "^5.4.0",
     "citty": "latest",
-    "ink": "latest",
-    "ink-select-input": "^6.2.0",
-    "ink-text-input": "^6.0.0",
-    "react-devtools-core": "^7.0.1"
+    "cli-highlight": "^2.1.11"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
     "bun-types": "^1.3.14",
-    "oxlint": "^1.68.0"
+    "oxlint": "^1.68.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }
