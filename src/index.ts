@@ -52,7 +52,7 @@ const configCmd = defineCommand({
         const config = new ConfigManager();
         const all = config.getAll();
         console.log('Strudel-TUI Configuration:');
-        console.log(`  apiKey:      ${all.apiKey ? '***' + all.apiKey.slice(-4) : '(not set)'}`);
+        console.log(`  apiKey:      ${all.apiKey ? '(set)' : '(not set)'}`);
         console.log(`  baseUrl:     ${all.baseUrl}`);
         console.log(`  model:       ${all.model}`);
         console.log(`  temperature: ${all.temperature}`);
