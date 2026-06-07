@@ -14,20 +14,13 @@ interface MessageHistoryProps {
   width?: number;
 }
 
-const TYPE_COLORS: Record<MessageType, string> = {
-  user: 'white',
-  agent: 'green',
-  error: 'red',
-  system: 'gray',
-  tool: 'yellow',
-};
-
-const TYPE_PREFIX: Record<MessageType, string> = {
-  user: '>',
-  agent: '<',
-  error: '!',
-  system: '*',
-  tool: '#',
+// Kimi-code style: colored bullets instead of plain prefixes
+const TYPE_STYLE: Record<MessageType, { symbol: string; color: string }> = {
+  user:   { symbol: '✦', color: '#f59e0b' },  // amber
+  agent:  { symbol: '●', color: '#22c55e' },  // green
+  error:  { symbol: '✗', color: '#ef4444' },  // red
+  system: { symbol: '◆', color: '#6b7280' },  // gray
+  tool:   { symbol: '▸', color: '#3b82f6' },  // blue
 };
 
 const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height, width }) => {
@@ -44,13 +37,19 @@ const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height, width
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1} width={width} flexShrink={0}>
       {visible.length === 0 ? (
-        <Text color="gray">No messages yet.</Text>
+        <Text color="gray" dimColor>Type a message or / for commands</Text>
       ) : (
-        visible.map((msg, idx) => (
-          <Text key={idx} color={TYPE_COLORS[msg.type]} wrap="truncate">
-            {TYPE_PREFIX[msg.type]} {truncate(msg.content)}
-          </Text>
-        ))
+        visible.map((msg, idx) => {
+          const style = TYPE_STYLE[msg.type];
+          return (
+            <Text key={idx} wrap="truncate">
+              <Text color={style.color}> {style.symbol} </Text>
+              <Text color={msg.type === 'system' ? 'gray' : 'white'}>
+                {truncate(msg.content)}
+              </Text>
+            </Text>
+          );
+        })
       )}
     </Box>
   );

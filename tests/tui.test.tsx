@@ -10,7 +10,7 @@ import type { Message } from '../src/tui/MessageHistory';
 describe('StatusBar', () => {
   test('renders stopped state without crashing', () => {
     const output = renderToString(
-      <StatusBar playing={false} bpm={130} patternName="untitled" />,
+      <StatusBar playing={false} bpm={130} patternName="untitled" mode="keyword" />,
     );
     expect(typeof output).toBe('string');
     expect(output).toContain('STOPPED');
@@ -20,20 +20,25 @@ describe('StatusBar', () => {
 
   test('renders playing state', () => {
     const output = renderToString(
-      <StatusBar playing={true} bpm={120} patternName="my-pattern" />,
+      <StatusBar playing={true} bpm={120} patternName="my-pattern" mode="llm" />,
     );
     expect(output).toContain('PLAYING');
     expect(output).toContain('120');
     expect(output).toContain('my-pattern');
   });
 
-  test('includes keyboard shortcut hints', () => {
+  test('shows streaming state', () => {
     const output = renderToString(
-      <StatusBar playing={false} bpm={130} patternName="test" />,
+      <StatusBar playing={false} bpm={130} patternName="test" mode="llm" streaming={true} />,
     );
-    expect(output).toContain('Ctrl+P');
-    expect(output).toContain('Ctrl+S');
-    expect(output).toContain('Ctrl+C');
+    expect(output).toContain('thinking');
+  });
+
+  test('shows mode indicator', () => {
+    const llm = renderToString(<StatusBar playing={false} bpm={130} patternName="t" mode="llm" />);
+    expect(llm).toContain('AI');
+    const kw = renderToString(<StatusBar playing={false} bpm={130} patternName="t" mode="keyword" />);
+    expect(kw).toContain('keyword');
   });
 });
 

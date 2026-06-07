@@ -27,12 +27,11 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   const { rows, columns } = useWindowSize();
 
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { type: 'system', content: 'Welcome to Strudel-TUI. Type a pattern or command and press Enter.' },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [pattern, setPattern] = useState(initialPattern ?? DEFAULT_PATTERN);
   const [playing, setPlaying] = useState(false);
   const [patternName, _setPatternName] = useState('untitled');
+  const [isStreaming, setIsStreaming] = useState(false);
 
   // Slash command menu state
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -44,15 +43,24 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   const historyIndexRef = useRef(-1);
   const inputHistoryRef = useRef<string[]>([]);
   const streamingRef = useRef(false);
+  const exitArmRef = useRef(0); // For double-tap Ctrl+C
 
-  // Show LLM mode status on mount
+  // Welcome banner on mount
   React.useEffect(() => {
     const agent = agentRef.current;
+    const lines = [
+      '╭─────────────────────────────────────────╮',
+      '│  ◉ strudel-tui                         │',
+      '│  Terminal live coding for Strudel       │',
+      '╰─────────────────────────────────────────╯',
+    ];
+    const welcomeMsgs: Message[] = lines.map(l => ({ type: 'system', content: l }));
     if (agent.hasLLM) {
-      setMessages(prev => [...prev, { type: 'system', content: 'AI agent mode enabled. Chat naturally to create and edit patterns.' }]);
+      welcomeMsgs.push({ type: 'system', content: '◆ AI agent ready. Chat naturally or use / commands.' });
     } else {
-      setMessages(prev => [...prev, { type: 'system', content: 'No API key configured. Using keyword mode. Run "strudel-tui config set apiKey <key>" to enable AI agent.' }]);
+      welcomeMsgs.push({ type: 'system', content: '◇ Keyword mode. Run strudel-tui config init to enable AI.' });
     }
+    setMessages(welcomeMsgs);
   }, []);
 
   const addMessage = useCallback((msg: Message) => {
@@ -133,6 +141,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
 
     if (agent.hasLLM) {
       streamingRef.current = true;
+      setIsStreaming(true);
       let streamingText = '';
       (async () => {
         try {
@@ -185,6 +194,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
           addMessage({ type: 'error', content: `Error: ${err.message}` });
         } finally {
           streamingRef.current = false;
+          setIsStreaming(false);
         }
       })();
     } else {
@@ -207,11 +217,30 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   }, [pattern, addMessage, handlePlay, handleStop, setMessages]);
 
   useInput((inputKey, key) => {
-    // Ctrl+C: quit gracefully
+    // Ctrl+C: double-tap to quit (safety pattern from kimi-code)
     if (key.ctrl && inputKey === 'c') {
-      if (playing) audioRef.current.stop().catch(() => {});
-      audioRef.current.shutdown().catch(() => {});
-      exit();
+      if (streamingRef.current) {
+        // Cancel streaming (TODO: implement abort)
+        streamingRef.current = false;
+        setIsStreaming(false);
+        addMessage({ type: 'system', content: 'Interrupted.' });
+        return;
+      }
+      const now = Date.now();
+      if (now - exitArmRef.current < 1500) {
+        // Second tap within 1.5s — exit
+        if (playing) audioRef.current.stop().catch(() => {});
+        audioRef.current.shutdown().catch(() => {});
+        exit();
+      } else {
+        // First tap — arm
+        exitArmRef.current = now;
+        if (input.length > 0) {
+          setInput('');
+        } else {
+          addMessage({ type: 'system', content: 'Press Ctrl+C again to exit.' });
+        }
+      }
       return;
     }
 
@@ -292,6 +321,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
 
       if (agent.hasLLM) {
         streamingRef.current = true;
+        setIsStreaming(true);
         let streamingText = '';
 
         (async () => {
@@ -352,6 +382,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
             addMessage({ type: 'error', content: `Error: ${err.message}` });
           } finally {
             streamingRef.current = false;
+            setIsStreaming(false);
           }
         })();
       } else {
@@ -423,7 +454,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
 
   return (
     <Box flexDirection="column" height={rows}>
-      <StatusBar playing={playing} bpm={bpm} patternName={patternName} />
+      <StatusBar playing={playing} bpm={bpm} patternName={patternName} mode={agentRef.current.hasLLM ? 'llm' : 'keyword'} streaming={isStreaming} />
       <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column" flexGrow={1}>
           <PatternEditor code={pattern} />
