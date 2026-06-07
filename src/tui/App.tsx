@@ -256,7 +256,8 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   });
 
   // Layout: status bar (top) + main row (left: editor+input, right: message sidebar)
-  const sidebarWidth = Math.max(20, Math.min(35, Math.floor(columns * 0.28)));
+  // Sidebar is 28% of screen width, min 20 cols, max 50 cols
+  const sidebarWidth = Math.max(20, Math.min(50, Math.floor(columns * 0.28)));
 
   return (
     <Box flexDirection="column" height={rows}>
