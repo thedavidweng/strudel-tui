@@ -43,6 +43,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: oxlint
+        run: bunx oxlint --tsconfig tsconfig.json src/ tests/
+
       - name: Type check
         run: bunx tsc --noEmit
 

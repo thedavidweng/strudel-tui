@@ -1,8 +1,8 @@
-import { OpenAIClient, type ChatMessage, type StreamEvent } from '../llm/OpenAIClient.js';
+import { OpenAIClient, type ChatMessage } from '../llm/OpenAIClient.js';
 import { STRUDEL_TOOLS, SYSTEM_PROMPT } from '../llm/tools.js';
 import { ToolExecutor } from './ToolExecutor.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
-import type { AgentEvent, AgentEventHandler, AgentResponse } from './Agent.js';
+import type { AgentEventHandler, AgentResponse } from './Agent.js';
 
 export class LLMAdapter {
   private _llm: OpenAIClient;
