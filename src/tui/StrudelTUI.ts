@@ -593,16 +593,16 @@ export class StrudelTUI {
   // ---------------------------------------------------------------------------
 
   private updateStreamingMessage(): void {
-    this.messageHistory.addMessage({ type: 'agent', content: this.streamingText + '▌' });
+    this.messageHistory.updateOrAddStreamingMessage(this.streamingText + '▌');
   }
 
   private updateLastToolMessage(content: string): void {
-    this.messageHistory.addMessage({ type: 'tool', content });
+    this.messageHistory.updateOrAddLastToolMessage(content);
   }
 
   private finalizeStreamingMessage(finalText: string): void {
     if (finalText) {
-      this.messageHistory.addMessage({ type: 'agent', content: finalText });
+      this.messageHistory.finalizeStreamingMessage(finalText);
     }
   }
 

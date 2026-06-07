@@ -43,6 +43,8 @@ export class MessageHistory implements Component {
   private _messages: Message[] = [];
   /** Distance from the bottom of the message list. 0 = pinned to bottom. */
   private _scrollOffset = 0;
+  /** Index of the current streaming message (-1 when not streaming). */
+  private _streamingIndex = -1;
 
   // -- Component interface --------------------------------------------------
 
@@ -87,6 +89,50 @@ export class MessageHistory implements Component {
 
   clear(): void {
     this._messages = [];
+    this._scrollOffset = 0;
+    this._streamingIndex = -1;
+    this.invalidate();
+  }
+
+  /**
+   * Update the streaming message in-place (or add it on first delta).
+   * Avoids accumulating duplicate messages on every text_delta.
+   */
+  updateOrAddStreamingMessage(content: string): void {
+    if (this._streamingIndex >= 0 && this._streamingIndex < this._messages.length) {
+      this._messages[this._streamingIndex] = { type: 'agent', content };
+    } else {
+      this._streamingIndex = this._messages.length;
+      this._messages.push({ type: 'agent', content });
+    }
+    this._scrollOffset = 0;
+    this.invalidate();
+  }
+
+  /**
+   * Replace the streaming message with the final text (no cursor).
+   */
+  finalizeStreamingMessage(finalText: string): void {
+    if (this._streamingIndex >= 0 && this._streamingIndex < this._messages.length) {
+      this._messages[this._streamingIndex] = { type: 'agent', content: finalText };
+    } else {
+      this._messages.push({ type: 'agent', content: finalText });
+    }
+    this._streamingIndex = -1;
+    this._scrollOffset = 0;
+    this.invalidate();
+  }
+
+  /**
+   * Update the last tool message in-place (or add it).
+   */
+  updateOrAddLastToolMessage(content: string): void {
+    const last = this._messages[this._messages.length - 1];
+    if (last && last.type === 'tool') {
+      last.content = content;
+    } else {
+      this._messages.push({ type: 'tool', content });
+    }
     this._scrollOffset = 0;
     this.invalidate();
   }
