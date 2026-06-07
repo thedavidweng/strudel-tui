@@ -6,9 +6,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/strudel-tui/strudel-tui/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="https://github.com/strudel-tui/strudel-tui/releases"><img src="https://img.shields.io/github/v/release/strudel-tui/strudel-tui" alt="Release"></a>
-  <a href="https://github.com/strudel-tui/strudel-tui/actions"><img src="https://img.shields.io/github/actions/workflow/status/strudel-tui/strudel-tui/ci.yml?branch=main" alt="CI"></a>
+  <a href="https://github.com/thedavidweng/strudel-tui/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="https://github.com/thedavidweng/strudel-tui/releases"><img src="https://img.shields.io/github/v/release/thedavidweng/strudel-tui" alt="Release"></a>
+  <a href="https://github.com/thedavidweng/strudel-tui/actions"><img src="https://img.shields.io/github/actions/workflow/status/thedavidweng/strudel-tui/ci.yml?branch=main" alt="CI"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/bun-%3E%3D1.3.12-f9f1e1?logo=bun" alt="Bun"></a>
   <a href="https://strudel.cc"><img src="https://img.shields.io/badge/strudel-powered-ff69b4" alt="Strudel"></a>
 </p>
@@ -34,8 +34,17 @@
 
 ### Install
 
+**Homebrew (macOS):**
+
 ```bash
-git clone https://github.com/strudel-tui/strudel-tui.git
+brew tap thedavidweng/tap
+brew install --cask strudel-tui
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/thedavidweng/strudel-tui.git
 cd strudel-tui
 bun install
 ```
@@ -84,21 +93,21 @@ bun run build
 
 ### TUI Interface
 
-The terminal UI has four regions:
+The terminal UI uses a sidebar layout:
 
 ```
-┌─────────────────────────────────────────────┐
-│ STOPPED | BPM: 130 | untitled | shortcuts   │  ← Status bar
-├─────────────────────────────────────────────┤
-│ > make a chill lo-fi beat                   │  ← Message history
-│ # Calling generate_pattern(...)             │
-│ < Generated: note("c d e f").s("sine")      │
-├─────────────────────────────────────────────┤
-│ Current Pattern:                            │  ← Pattern editor
-│ note("c d e f").sound("sine")               │
-├─────────────────────────────────────────────┤
-│ > _                                         │  ← Input box
-└─────────────────────────────────────────────┘
+┌──────────────────────────────┬──────────────────┐
+│ STOPPED | BPM: 130 | shortcuts                  │  ← Status bar
+├──────────────────────────────┼──────────────────┤
+│                              │ > make a chill   │
+│  1 | s("bd sn").lpf(800)    │ # generate...    │
+│                              │ < note("c d e f")│
+│ Pattern Editor               │                  │
+│                              │ Message          │
+│                              │ History          │
+│ > _                          │                  │
+│ Input                        │                  │
+└──────────────────────────────┴──────────────────┘
 ```
 
 ### Commands

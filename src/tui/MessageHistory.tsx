@@ -11,6 +11,7 @@ export interface Message {
 interface MessageHistoryProps {
   messages: Message[];
   height: number;
+  width?: number;
 }
 
 const TYPE_COLORS: Record<MessageType, string> = {
@@ -29,18 +30,25 @@ const TYPE_PREFIX: Record<MessageType, string> = {
   tool: '#',
 };
 
-const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height }) => {
+const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height, width }) => {
   const maxVisible = Math.max(1, height - 2);
   const visible = messages.slice(-maxVisible);
+  // Account for border (2) + paddingX (2) = 4 chars overhead
+  const textWidth = width ? Math.max(10, width - 4) : undefined;
+
+  const truncate = (text: string): string => {
+    if (!textWidth || text.length <= textWidth) return text;
+    return text.slice(0, textWidth - 1) + '…';
+  };
 
   return (
-    <Box flexDirection="column" borderStyle="round" paddingX={1} flexGrow={1}>
+    <Box flexDirection="column" borderStyle="round" paddingX={1} width={width} flexShrink={0}>
       {visible.length === 0 ? (
-        <Text color="gray">Type a message and press Enter.</Text>
+        <Text color="gray">No messages yet.</Text>
       ) : (
         visible.map((msg, idx) => (
-          <Text key={idx} color={TYPE_COLORS[msg.type]}>
-            {TYPE_PREFIX[msg.type]} {msg.content}
+          <Text key={idx} color={TYPE_COLORS[msg.type]} wrap="truncate">
+            {TYPE_PREFIX[msg.type]} {truncate(msg.content)}
           </Text>
         ))
       )}

@@ -22,7 +22,7 @@ d1 $ s "bd sn"`;
 
 const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug = false, configOverrides }) => {
   const { exit } = useApp();
-  const { rows } = useWindowSize();
+  const { rows, columns } = useWindowSize();
 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -256,18 +256,20 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug = false, con
     }
   });
 
-  // Layout: status bar (1) + message history (flex) + pattern editor (flex) + input (1)
-  const reservedRows = 6;
-  const availableRows = Math.max(10, rows - reservedRows);
-  const historyHeight = Math.floor(availableRows / 2);
-  const editorHeight = availableRows - historyHeight;
+  // Layout: status bar (top) + main row (left: editor+input, right: message sidebar)
+  const sidebarWidth = Math.max(30, Math.min(50, Math.floor(columns * 0.35)));
+  const mainAreaRows = Math.max(6, rows - 2); // -2 for status bar top/bottom borders
 
   return (
     <Box flexDirection="column" height={rows}>
       <StatusBar playing={playing} bpm={bpm} patternName={patternName} />
-      <MessageHistory messages={messages} height={historyHeight} />
-      <PatternEditor code={pattern} />
-      <InputBox value={input} />
+      <Box flexDirection="row" flexGrow={1}>
+        <Box flexDirection="column" flexGrow={1}>
+          <PatternEditor code={pattern} />
+          <InputBox value={input} />
+        </Box>
+        <MessageHistory messages={messages} height={mainAreaRows} width={sidebarWidth} />
+      </Box>
     </Box>
   );
 };

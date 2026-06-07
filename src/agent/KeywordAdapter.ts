@@ -1,0 +1,160 @@
+import { ToolExecutor } from './ToolExecutor.js';
+import type { AgentResponse } from './Agent.js';
+import { formatHelp } from './HelpText.js';
+
+// ---------------------------------------------------------------------------
+// Intent detection
+// ---------------------------------------------------------------------------
+
+type Intent =
+  | { type: 'play' }
+  | { type: 'stop' }
+  | { type: 'generate'; description: string }
+  | { type: 'edit'; instruction: string }
+  | { type: 'validate' }
+  | { type: 'undo' }
+  | { type: 'redo' }
+  | { type: 'help' }
+  | { type: 'pattern'; code: string };
+
+const PLAY_RE = /^\s*(play|start|go)\b/i;
+const STOP_RE = /^\s*(stop|pause|hush)\b/i;
+const GENERATE_RE = /^\s*(make|create|generate)\s+(.+)/i;
+const EDIT_RE = /^\s*(edit|change|modify)\s+(.+)/i;
+const VALIDATE_RE = /^\s*(validate|check)\b/i;
+const UNDO_RE = /^\s*undo\b/i;
+const REDO_RE = /^\s*redo\b/i;
+const HELP_RE = /^\s*help\b/i;
+
+function detectIntent(message: string): Intent {
+  let m: RegExpMatchArray | null;
+  if (HELP_RE.test(message)) return { type: 'help' };
+  if (PLAY_RE.test(message)) return { type: 'play' };
+  if (STOP_RE.test(message)) return { type: 'stop' };
+  if (UNDO_RE.test(message)) return { type: 'undo' };
+  if (REDO_RE.test(message)) return { type: 'redo' };
+  if (VALIDATE_RE.test(message)) return { type: 'validate' };
+  m = message.match(GENERATE_RE);
+  if (m) return { type: 'generate', description: m[2].trim() };
+  m = message.match(EDIT_RE);
+  if (m) return { type: 'edit', instruction: m[2].trim() };
+  return { type: 'pattern', code: message };
+}
+
+// ---------------------------------------------------------------------------
+// KeywordAdapter
+// ---------------------------------------------------------------------------
+
+export class KeywordAdapter {
+  private _executor: ToolExecutor;
+
+  constructor(executor: ToolExecutor) {
+    this._executor = executor;
+  }
+
+  async processMessage(message: string): Promise<AgentResponse> {
+    const intent = detectIntent(message);
+    let response: AgentResponse;
+
+    try {
+      switch (intent.type) {
+        case 'play':
+          response = { action: 'play', message: 'Starting playback...', pattern: this._executor.currentPattern };
+          break;
+
+        case 'stop':
+          await this._executor.executeTool('stop_playback', {});
+          response = { action: 'stop', message: 'Stopping playback.' };
+          break;
+
+        case 'generate': {
+          const result = await this._executor.executeTool('generate_pattern', { description: intent.description });
+          response = { action: 'generate', message: result, pattern: this._executor.currentPattern };
+          break;
+        }
+
+        case 'edit': {
+          if (!this._executor.currentPattern.trim()) {
+            response = { action: 'edit', message: 'No pattern to edit.', error: 'No current pattern' };
+            break;
+          }
+          const result = await this._executor.executeTool('edit_pattern', { instruction: intent.instruction });
+          const edited = this._executor.currentPattern;
+          if (result.startsWith('Could not')) {
+            response = { action: 'edit', message: result, pattern: edited };
+          } else {
+            response = { action: 'edit', message: result, pattern: edited };
+          }
+          break;
+        }
+
+        case 'validate': {
+          if (!this._executor.currentPattern.trim()) {
+            response = { action: 'validate', message: 'No pattern to validate.' };
+            break;
+          }
+          const result = await this._executor.executeTool('validate_pattern', { code: this._executor.currentPattern });
+          if (result.startsWith('Valid')) {
+            response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
+          } else {
+            response = { action: 'validate', message: result, error: result, pattern: this._executor.currentPattern };
+          }
+          break;
+        }
+
+        case 'undo': {
+          const restored = this._executor.undoPattern();
+          if (restored === undefined) {
+            response = { action: 'undo', message: 'Nothing to undo.' };
+          } else {
+            response = { action: 'undo', message: 'Reverted to previous pattern.', pattern: restored };
+          }
+          break;
+        }
+
+        case 'redo': {
+          const restored = this._executor.redoPattern();
+          if (restored === undefined) {
+            response = { action: 'redo', message: 'Nothing to redo.' };
+          } else {
+            response = { action: 'redo', message: 'Re-applied pattern.', pattern: restored };
+          }
+          break;
+        }
+
+        case 'help':
+          response = { action: 'help', message: formatHelp() };
+          break;
+
+        case 'pattern': {
+          const result = await this._executor.executeTool('set_pattern', { code: intent.code });
+          if (result.startsWith('Invalid')) {
+            response = { action: 'pattern', message: result, error: result };
+          } else {
+            response = { action: 'pattern', message: 'Pattern set.', pattern: intent.code };
+          }
+          break;
+        }
+
+        default:
+          response = { action: 'unknown', message: 'Could not understand input.', error: 'Unknown intent' };
+      }
+    } catch (err: any) {
+      response = { action: 'error', message: `Error: ${err.message}`, error: err.message };
+    }
+
+    return response;
+  }
+
+  // Undo/redo require access to SessionHistory. ToolExecutor owns the history
+  // and manages pattern stack. We expose undo/redo through the executor.
+  private _undoPattern(): string | undefined {
+    // Access the history through executor's pattern stack
+    // This is a temporary bridge — in Slice 6 we'll wire this properly
+    return (this._executor as any)._history?.undoPattern();
+  }
+
+  private _redoPattern(): string | undefined {
+    return (this._executor as any)._history?.redoPattern();
+  }
+}

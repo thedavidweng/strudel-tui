@@ -1,0 +1,139 @@
+import { describe, test, expect, beforeEach } from 'bun:test';
+import { KeywordAdapter } from '../src/agent/KeywordAdapter';
+import { ToolExecutor } from '../src/agent/ToolExecutor';
+import { SessionHistory } from '../src/agent/SessionHistory';
+
+describe('KeywordAdapter', () => {
+  let adapter: KeywordAdapter;
+  let executor: ToolExecutor;
+  let history: SessionHistory;
+
+  beforeEach(() => {
+    history = new SessionHistory('test-keyword');
+    executor = new ToolExecutor('', history);
+    adapter = new KeywordAdapter(executor);
+  });
+
+  // -------------------------------------------------------------------------
+  // Intent routing
+  // -------------------------------------------------------------------------
+
+  describe('intent routing', () => {
+    test('"play" returns a play action', async () => {
+      const response = await adapter.processMessage('play');
+      expect(response.action).toBe('play');
+    });
+
+    test('"start" also triggers play', async () => {
+      const response = await adapter.processMessage('start');
+      expect(response.action).toBe('play');
+    });
+
+    test('"go" also triggers play', async () => {
+      const response = await adapter.processMessage('go');
+      expect(response.action).toBe('play');
+    });
+
+    test('"stop" returns a stop action', async () => {
+      const response = await adapter.processMessage('stop');
+      expect(response.action).toBe('stop');
+      expect(response.message.toLowerCase()).toContain('stop');
+    });
+
+    test('"pause" also triggers stop', async () => {
+      const response = await adapter.processMessage('pause');
+      expect(response.action).toBe('stop');
+    });
+
+    test('"hush" also triggers stop', async () => {
+      const response = await adapter.processMessage('hush');
+      expect(response.action).toBe('stop');
+    });
+
+    test('"help" returns help text', async () => {
+      const response = await adapter.processMessage('help');
+      expect(response.action).toBe('help');
+      expect(response.message).toContain('Commands');
+      expect(response.message).toContain('play');
+    });
+
+    test('pattern code returns a pattern action', async () => {
+      const response = await adapter.processMessage('s("bd sn")');
+      expect(response.action).toBe('pattern');
+      expect(response.pattern).toBe('s("bd sn")');
+    });
+
+    test('invalid pattern code returns an error', async () => {
+      const response = await adapter.processMessage('s("bd sn"');
+      expect(response.action).toBe('pattern');
+      expect(response.error).toBeDefined();
+    });
+
+    test('"make a drum beat" returns a generate action', async () => {
+      const response = await adapter.processMessage('make a drum beat');
+      expect(response.action).toBe('generate');
+      expect(response.pattern).toBeDefined();
+      expect(response.pattern!.length).toBeGreaterThan(0);
+    });
+
+    test('"validate" with no pattern reports no pattern', async () => {
+      const response = await adapter.processMessage('validate');
+      expect(response.action).toBe('validate');
+      expect(response.message).toContain('No pattern');
+    });
+
+    test('"undo" with no history returns nothing to undo', async () => {
+      const response = await adapter.processMessage('undo');
+      expect(response.action).toBe('undo');
+      expect(response.message).toContain('Nothing to undo');
+    });
+
+    test('"redo" with no history returns nothing to redo', async () => {
+      const response = await adapter.processMessage('redo');
+      expect(response.action).toBe('redo');
+      expect(response.message).toContain('Nothing to redo');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Edit via ToolExecutor
+  // -------------------------------------------------------------------------
+
+  describe('edit routing', () => {
+    test('"edit faster" on a pattern applies the edit', async () => {
+      executor.setPattern('s("bd sn")');
+      const response = await adapter.processMessage('edit faster');
+      expect(response.action).toBe('edit');
+      expect(response.pattern).toContain('.fast(2)');
+    });
+
+    test('"edit" with no pattern reports no pattern', async () => {
+      const response = await adapter.processMessage('edit faster');
+      expect(response.action).toBe('edit');
+      expect(response.error).toBeDefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Undo/redo through history
+  // -------------------------------------------------------------------------
+
+  describe('undo/redo', () => {
+    test('"undo" after setting a pattern reverts', async () => {
+      executor.setPattern('first');
+      executor.setPattern('second');
+      const response = await adapter.processMessage('undo');
+      expect(response.action).toBe('undo');
+      expect(response.pattern).toBe('first');
+    });
+
+    test('"redo" after undo re-applies', async () => {
+      executor.setPattern('first');
+      executor.setPattern('second');
+      adapter.processMessage('undo');
+      const response = await adapter.processMessage('redo');
+      expect(response.action).toBe('redo');
+      expect(response.pattern).toBe('second');
+    });
+  });
+});
