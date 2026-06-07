@@ -132,7 +132,7 @@ export class DiffGenerator {
   private _buildLCS(a: string[], b: string[]): number[][] {
     const m = a.length;
     const n = b.length;
-    const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from({ length: n + 1 }, () => 0));
 
     for (let i = 1; i <= m; i++) {
       for (let j = 1; j <= n; j++) {
@@ -204,8 +204,8 @@ export class DiffGenerator {
    */
   private _formatUnified(
     diffLines: DiffLine[],
-    oldLineCount: number,
-    newLineCount: number,
+    _oldLineCount: number,
+    _newLineCount: number,
   ): string {
     if (diffLines.length === 0) return '';
 

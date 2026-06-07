@@ -42,7 +42,7 @@ describe('LLMAdapter', () => {
 
   describe('tool call handling', () => {
     test('executor is shared between adapter instances', () => {
-      const adapter = new LLMAdapter(executor, {
+      const _adapter = new LLMAdapter(executor, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',

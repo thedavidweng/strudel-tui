@@ -250,7 +250,7 @@ export class StrudelEngineWrapper {
 
     // Root note (2 octaves range)
     const roots = ['c', 'd', 'e', 'f', 'g', 'a'];
-    const root = roots[(hash >> 8) % roots.length];
+    const _root = roots[(hash >> 8) % roots.length];
 
     // Generate 4-8 note events
     const noteCount = 4 + ((hash >> 4) & 0x03); // 4-7

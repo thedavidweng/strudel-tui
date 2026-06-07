@@ -164,7 +164,7 @@ export class OpenAIClient {
           const data = trimmed.slice(6);
           if (data === '[DONE]') {
             // Emit accumulated tool calls
-            for (const [index, tc] of toolCalls) {
+            for (const [_index, tc] of toolCalls) {
               yield {
                 type: 'tool_call_end',
                 id: tc.id,
@@ -218,7 +218,7 @@ export class OpenAIClient {
             }
 
             if (chunk.choices[0]?.finish_reason) {
-              for (const [index, tc] of toolCalls) {
+              for (const [_index, tc] of toolCalls) {
                 yield {
                   type: 'tool_call_end',
                   id: tc.id,

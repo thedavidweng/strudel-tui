@@ -20,7 +20,7 @@ interface AppProps {
 const DEFAULT_PATTERN = `// Start typing your Strudel pattern here
 d1 $ s "bd sn"`;
 
-const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug = false, configOverrides }) => {
+const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = false, configOverrides }) => {
   const { exit } = useApp();
   const { rows, columns } = useWindowSize();
 
@@ -30,7 +30,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug = false, con
   ]);
   const [pattern, setPattern] = useState(initialPattern ?? DEFAULT_PATTERN);
   const [playing, setPlaying] = useState(false);
-  const [patternName, setPatternName] = useState('untitled');
+  const [patternName, _setPatternName] = useState('untitled');
 
   const agentRef = useRef(new Agent(initialPattern ?? '', undefined, configOverrides));
   const audioRef = useRef(new AudioController());
@@ -153,7 +153,6 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug = false, con
         // Streaming mode
         streamingRef.current = true;
         let streamingText = '';
-        const streamingMsgIdx = -1; // Will be set when first delta arrives
 
         (async () => {
           try {

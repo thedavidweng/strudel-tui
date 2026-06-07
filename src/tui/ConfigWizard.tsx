@@ -130,7 +130,7 @@ const ConfigWizard: React.FC = () => {
     }
   };
 
-  const handleSkipModels = () => {
+  const _handleSkipModels = () => {
     setModels([]);
     setStep('select-model');
   };
