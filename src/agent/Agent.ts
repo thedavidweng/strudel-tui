@@ -131,6 +131,22 @@ export class Agent {
   }
 
   // -------------------------------------------------------------------------
+  // Direct undo/redo (bypasses LLM)
+  // -------------------------------------------------------------------------
+
+  undo(): string | undefined {
+    const restored = this._executor.undoPattern();
+    this._syncPatternFromExecutor();
+    return restored;
+  }
+
+  redo(): string | undefined {
+    const restored = this._executor.redoPattern();
+    this._syncPatternFromExecutor();
+    return restored;
+  }
+
+  // -------------------------------------------------------------------------
   // Generate diff (public, backward compat)
   // -------------------------------------------------------------------------
 

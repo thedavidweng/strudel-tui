@@ -1,16 +1,18 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useInput, useApp, useWindowSize } from 'ink';
+import { Box, Text, useInput, useApp, useWindowSize } from 'ink';
 import MessageHistory from './MessageHistory.js';
 import type { Message } from './MessageHistory.js';
 import PatternEditor from './PatternEditor.js';
 import StatusBar from './StatusBar.js';
-import InputBox from './InputBox.js';
-import SlashCommandMenu, { filterCommands } from './SlashCommandMenu.js';
-import type { SlashCommand } from './SlashCommandMenu.js';
+import { SLASH_COMMANDS, filterCommands } from './SlashCommandMenu.js';
+import { colors } from './theme.js';
 import { AudioController } from '../audio/AudioController.js';
 import { Agent } from '../agent/Agent.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
+import { ConfigManager } from '../config/ConfigManager.js';
 import { writeFile } from 'node:fs/promises';
+import InlineConfig from './InlineConfig.js';
+import { formatHelp } from '../agent/HelpText.js';
 
 interface AppProps {
   initialPattern?: string;
@@ -33,34 +35,55 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   const [patternName, _setPatternName] = useState('untitled');
   const [isStreaming, setIsStreaming] = useState(false);
 
-  // Slash command menu state
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
-  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
-  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  // Autocomplete state — suggestions appear above input when typing "/"
+  const [suggestions, setSuggestions] = useState<typeof SLASH_COMMANDS>([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1); // -1 = none highlighted
+
+  // Inline config panel state
+  const [configPanel, setConfigPanel] = useState<'config' | 'provider' | null>(null);
+  const [modelName, setModelName] = useState<string | undefined>(() => {
+    const cfg = new ConfigManager();
+    return cfg.isConfigured() ? cfg.get('model') : undefined;
+  });
 
   const agentRef = useRef(new Agent(initialPattern ?? '', undefined, configOverrides));
   const audioRef = useRef(new AudioController());
   const historyIndexRef = useRef(-1);
   const inputHistoryRef = useRef<string[]>([]);
   const streamingRef = useRef(false);
-  const exitArmRef = useRef(0); // For double-tap Ctrl+C
+  const exitArmRef = useRef(0);
 
-  // Welcome banner on mount
+  // Update suggestions whenever input changes
+  const updateSuggestions = useCallback((value: string) => {
+    if (value.startsWith('/')) {
+      const filtered = filterCommands(value);
+      setSuggestions(filtered);
+      setSuggestionIndex(filtered.length > 0 ? 0 : -1);
+    } else {
+      setSuggestions([]);
+      setSuggestionIndex(-1);
+    }
+  }, []);
+
+  const setInputAndSuggestions = useCallback((value: string) => {
+    setInput(value);
+    updateSuggestions(value);
+  }, [updateSuggestions]);
+
+  // Welcome messages
   React.useEffect(() => {
     const agent = agentRef.current;
-    const lines = [
-      '╭─────────────────────────────────────────╮',
-      '│  ◉ strudel-tui                         │',
-      '│  Terminal live coding for Strudel       │',
-      '╰─────────────────────────────────────────╯',
-    ];
-    const welcomeMsgs: Message[] = lines.map(l => ({ type: 'system', content: l }));
     if (agent.hasLLM) {
-      welcomeMsgs.push({ type: 'system', content: '◆ AI agent ready. Chat naturally or use / commands.' });
+      setMessages([
+        { type: 'system', content: '◆ AI agent ready' },
+        { type: 'system', content: '  Type a message or send /help for commands' },
+      ]);
     } else {
-      welcomeMsgs.push({ type: 'system', content: '◇ Keyword mode. Run strudel-tui config init to enable AI.' });
+      setMessages([
+        { type: 'system', content: '◇ Keyword mode — no AI provider configured' },
+        { type: 'system', content: '  Send /config to set up AI, or /help for commands' },
+      ]);
     }
-    setMessages(welcomeMsgs);
   }, []);
 
   const addMessage = useCallback((msg: Message) => {
@@ -69,10 +92,8 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
 
   const handlePlay = useCallback(async () => {
     try {
-      addMessage({ type: 'system', content: 'Starting playback...' });
       await audioRef.current.play(pattern);
       setPlaying(true);
-      addMessage({ type: 'system', content: 'Playback started.' });
     } catch (err: any) {
       addMessage({ type: 'error', content: `Playback error: ${err.message}` });
     }
@@ -82,7 +103,6 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
     try {
       await audioRef.current.stop();
       setPlaying(false);
-      addMessage({ type: 'system', content: 'Playback stopped.' });
     } catch (err: any) {
       addMessage({ type: 'error', content: `Stop error: ${err.message}` });
     }
@@ -92,50 +112,79 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
     const filename = `${patternName}.strudel`;
     try {
       await writeFile(filename, pattern, 'utf-8');
-      addMessage({ type: 'system', content: `Pattern saved to ${filename}` });
+      addMessage({ type: 'system', content: `Saved to ${filename}` });
     } catch (err: any) {
       addMessage({ type: 'error', content: `Save error: ${err.message}` });
     }
   }, [pattern, patternName, addMessage]);
 
-  const executeSlashCommand = useCallback((cmd: SlashCommand) => {
-    const cmdName = cmd.name;
+  const handleConfigClose = useCallback((saved: boolean) => {
+    setConfigPanel(null);
+    if (saved) {
+      // Reload agent with new config
+      const newAgent = new Agent(pattern, undefined);
+      agentRef.current = newAgent;
+      setModelName(new ConfigManager().get('model'));
+      addMessage({ type: 'system', content: '◆ Configuration saved · AI agent reloaded' });
+    } else {
+      addMessage({ type: 'system', content: 'Configuration cancelled' });
+    }
+  }, [pattern, addMessage]);
+
+  const executeCommand = useCallback((cmdName: string) => {
     const needsArg = ['/make', '/edit', '/load'].includes(cmdName);
 
     if (needsArg) {
-      // Keep the command in the input so user can type the argument
-      setInput(cmdName + ' ');
-      setSlashMenuOpen(false);
+      setInputAndSuggestions(cmdName + ' ');
       return;
     }
 
-    // Commands handled locally (no agent needed)
     if (cmdName === '/config') {
-      setInput('');
-      setSlashMenuOpen(false);
-      addMessage({ type: 'user', content: '/config' });
-      const agent = agentRef.current;
-      if (agent.hasLLM) {
-        addMessage({ type: 'system', content: `AI agent: enabled\nLLM mode: streaming` });
-      } else {
-        addMessage({ type: 'system', content: 'AI agent: disabled (keyword mode)\nRun "strudel-tui config set apiKey <key>" to enable.' });
-      }
+      setConfigPanel('config');
       return;
     }
 
     if (cmdName === '/provider') {
-      setInput('');
-      setSlashMenuOpen(false);
-      addMessage({ type: 'user', content: '/provider' });
-      addMessage({ type: 'system', content: 'Providers: OpenAI, DeepSeek, Moonshot, Zhipu, Qwen, OpenRouter\nConfig: strudel-tui config init\nSet key:  strudel-tui config set apiKey <key>\nSet url:  strudel-tui config set baseUrl <url>\nSet model: strudel-tui config set model <name>' });
+      setConfigPanel('provider');
       return;
     }
 
-    // Execute immediately
-    setInput('');
-    setSlashMenuOpen(false);
-    addMessage({ type: 'user', content: cmdName });
+    // ── Direct commands: execute immediately, bypass LLM ──
+    const directCommands: Record<string, () => void> = {
+      '/play': () => { handlePlay(); addMessage({ type: 'system', content: 'Playing' }); },
+      '/stop': () => { handleStop(); addMessage({ type: 'system', content: 'Stopped' }); },
+      '/save': () => { handleSave(); },
+      '/clear': () => { setMessages([]); },
+      '/help': () => { addMessage({ type: 'system', content: formatHelp() }); },
+      '/quit': () => { exit(); },
+      '/undo': () => {
+        const agent = agentRef.current;
+        const restored = agent.undo();
+        if (restored !== undefined) {
+          setPattern(restored);
+          addMessage({ type: 'system', content: 'Reverted to previous pattern' });
+        } else {
+          addMessage({ type: 'system', content: 'Nothing to undo' });
+        }
+      },
+      '/redo': () => {
+        const agent = agentRef.current;
+        const restored = agent.redo();
+        if (restored !== undefined) {
+          setPattern(restored);
+          addMessage({ type: 'system', content: 'Re-applied pattern' });
+        } else {
+          addMessage({ type: 'system', content: 'Nothing to redo' });
+        }
+      },
+    };
 
+    if (directCommands[cmdName]) {
+      directCommands[cmdName]();
+      return;
+    }
+
+    // ── Agent commands (make, edit, validate) ──
     const agent = agentRef.current;
     agent.context.pattern = pattern;
 
@@ -158,15 +207,15 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
                 });
                 break;
               case 'tool_call':
-                addMessage({ type: 'tool', content: `Calling ${event.name}(${JSON.stringify(event.args)})` });
+                addMessage({ type: 'tool', content: `▸ ${event.name}` });
                 break;
               case 'tool_result':
                 setMessages(prev => {
                   const last = prev[prev.length - 1];
-                  if (last && last.type === 'tool' && last.content.startsWith('Calling')) {
-                    return [...prev.slice(0, -1), { type: 'tool', content: `${last.content} → ${event.result}` }];
+                  if (last && last.type === 'tool') {
+                    return [...prev.slice(0, -1), { type: 'tool', content: `▸ ${event.name} → ${event.result}` }];
                   }
-                  return [...prev, { type: 'tool', content: `${event.name}: ${event.result}` }];
+                  return [...prev, { type: 'tool', content: `▸ ${event.name} → ${event.result}` }];
                 });
                 break;
               case 'pattern_update':
@@ -191,7 +240,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
             }
           });
         } catch (err: any) {
-          addMessage({ type: 'error', content: `Error: ${err.message}` });
+          addMessage({ type: 'error', content: err.message });
         } finally {
           streamingRef.current = false;
           setIsStreaming(false);
@@ -210,112 +259,146 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
           if (response.action === 'play') handlePlay();
           else if (response.action === 'stop') handleStop();
         } catch (err: any) {
-          addMessage({ type: 'error', content: `Agent error: ${err.message}` });
+          addMessage({ type: 'error', content: err.message });
         }
       })();
     }
-  }, [pattern, addMessage, handlePlay, handleStop, setMessages]);
+  }, [pattern, addMessage, handlePlay, handleStop, handleSave, exit, setMessages, setInputAndSuggestions]);
 
   useInput((inputKey, key) => {
-    // Ctrl+C: double-tap to quit (safety pattern from kimi-code)
+    // Block all input while config panel is open (InlineConfig handles its own)
+    if (configPanel) return;
+
+    // Ctrl+C: double-tap to quit
     if (key.ctrl && inputKey === 'c') {
       if (streamingRef.current) {
-        // Cancel streaming (TODO: implement abort)
         streamingRef.current = false;
         setIsStreaming(false);
-        addMessage({ type: 'system', content: 'Interrupted.' });
+        addMessage({ type: 'system', content: 'Interrupted' });
         return;
       }
       const now = Date.now();
       if (now - exitArmRef.current < 1500) {
-        // Second tap within 1.5s — exit
         if (playing) audioRef.current.stop().catch(() => {});
         audioRef.current.shutdown().catch(() => {});
         exit();
       } else {
-        // First tap — arm
         exitArmRef.current = now;
         if (input.length > 0) {
-          setInput('');
+          setInputAndSuggestions('');
         } else {
-          addMessage({ type: 'system', content: 'Press Ctrl+C again to exit.' });
+          addMessage({ type: 'system', content: 'Press ctrl+c again to exit' });
         }
       }
       return;
     }
 
-    // Ctrl+P: toggle play/stop
     if (key.ctrl && inputKey === 'p') {
       if (playing) handleStop();
       else handlePlay();
       return;
     }
 
-    // Ctrl+S: save pattern
     if (key.ctrl && inputKey === 's') {
       handleSave();
       return;
     }
 
-    // Ctrl+L: clear message history
     if (key.ctrl && inputKey === 'l') {
       setMessages([]);
       return;
     }
 
-    // Escape: close slash menu
-    if (key.escape) {
-      if (slashMenuOpen) {
-        setSlashMenuOpen(false);
-        return;
-      }
+    // Tab: accept highlighted suggestion
+    if (key.tab && suggestions.length > 0 && suggestionIndex >= 0) {
+      const selected = suggestions[suggestionIndex]!;
+      const needsArg = ['/make', '/edit', '/load'].includes(selected.name);
+      setInputAndSuggestions(needsArg ? selected.name + ' ' : selected.name);
+      return;
     }
 
-    // Arrow keys
+    // Escape: clear suggestions or clear input
+    if (key.escape) {
+      if (suggestions.length > 0) {
+        setSuggestions([]);
+        setSuggestionIndex(-1);
+      } else if (input.length > 0) {
+        setInputAndSuggestions('');
+      }
+      return;
+    }
+
+    // Arrow up: navigate suggestions or input history
     if (key.upArrow) {
-      if (slashMenuOpen) {
-        setSlashSelectedIndex(prev => Math.max(0, prev - 1));
+      if (suggestions.length > 0) {
+        setSuggestionIndex(prev => Math.max(0, prev - 1));
       } else if (inputHistoryRef.current.length > 0) {
         const idx = historyIndexRef.current + 1;
         if (idx < inputHistoryRef.current.length) {
           historyIndexRef.current = idx;
-          setInput(inputHistoryRef.current[inputHistoryRef.current.length - 1 - idx]);
+          const val = inputHistoryRef.current[inputHistoryRef.current.length - 1 - idx];
+          setInputAndSuggestions(val);
         }
       }
       return;
     }
 
+    // Arrow down: navigate suggestions or input history
     if (key.downArrow) {
-      if (slashMenuOpen) {
-        setSlashSelectedIndex(prev => Math.min(slashCommands.length - 1, prev + 1));
+      if (suggestions.length > 0) {
+        setSuggestionIndex(prev => Math.min(suggestions.length - 1, prev + 1));
       } else if (historyIndexRef.current > 0) {
         historyIndexRef.current -= 1;
-        setInput(inputHistoryRef.current[inputHistoryRef.current.length - 1 - historyIndexRef.current]);
+        const val = inputHistoryRef.current[inputHistoryRef.current.length - 1 - historyIndexRef.current];
+        setInputAndSuggestions(val);
       } else {
         historyIndexRef.current = -1;
-        setInput('');
+        setInputAndSuggestions('');
       }
       return;
     }
 
-    // Enter
+    // Enter: execute highlighted suggestion, or submit input
     if (key.return) {
-      if (slashMenuOpen && slashCommands.length > 0) {
-        // Select the highlighted command
-        executeSlashCommand(slashCommands[slashSelectedIndex]);
+      // Resolve what to execute: suggestion or typed input
+      let cmdToExecute: string | null = null;
+
+      if (suggestions.length > 0 && suggestionIndex >= 0) {
+        const selected = suggestions[suggestionIndex]!;
+        const needsArg = ['/make', '/edit', '/load'].includes(selected.name);
+        if (needsArg) {
+          // Commands that need arguments: fill input so user can type the arg
+          setInputAndSuggestions(selected.name + ' ');
+          return;
+        }
+        cmdToExecute = selected.name;
+      }
+
+      if (!cmdToExecute) {
+        if (input.trim().length === 0) return;
+        if (streamingRef.current) return;
+        const userInput = input.trim();
+        if (userInput.startsWith('/')) {
+          const cmd = SLASH_COMMANDS.find(c => c.name === userInput || c.alias?.includes(userInput));
+          if (cmd) cmdToExecute = cmd.name;
+        }
+      }
+
+      if (cmdToExecute) {
+        addMessage({ type: 'user', content: cmdToExecute });
+        inputHistoryRef.current.push(cmdToExecute);
+        historyIndexRef.current = -1;
+        setInputAndSuggestions('');
+        executeCommand(cmdToExecute);
         return;
       }
 
-      if (input.trim().length === 0) return;
-      if (streamingRef.current) return;
-
+      // Regular message → send to agent
       const userInput = input.trim();
       addMessage({ type: 'user', content: userInput });
       inputHistoryRef.current.push(userInput);
       historyIndexRef.current = -1;
-      setInput('');
-      setSlashMenuOpen(false);
-
+      setInputAndSuggestions('');
       const agent = agentRef.current;
       agent.context.pattern = pattern;
 
@@ -338,25 +421,21 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
                     return [...prev, { type: 'agent', content: streamingText + '▌' }];
                   });
                   break;
-
                 case 'tool_call':
-                  addMessage({ type: 'tool', content: `Calling ${event.name}(${JSON.stringify(event.args)})` });
+                  addMessage({ type: 'tool', content: `▸ ${event.name}` });
                   break;
-
                 case 'tool_result':
                   setMessages(prev => {
                     const last = prev[prev.length - 1];
-                    if (last && last.type === 'tool' && last.content.startsWith('Calling')) {
-                      return [...prev.slice(0, -1), { type: 'tool', content: `${last.content} → ${event.result}` }];
+                    if (last && last.type === 'tool') {
+                      return [...prev.slice(0, -1), { type: 'tool', content: `▸ ${event.name} → ${event.result}` }];
                     }
-                    return [...prev, { type: 'tool', content: `${event.name}: ${event.result}` }];
+                    return [...prev, { type: 'tool', content: `▸ ${event.name} → ${event.result}` }];
                   });
                   break;
-
                 case 'pattern_update':
                   setPattern(event.pattern);
                   break;
-
                 case 'done':
                   setMessages(prev => {
                     const last = prev[prev.length - 1];
@@ -368,18 +447,15 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
                     }
                     return prev;
                   });
-                  if (event.response.pattern) {
-                    setPattern(event.response.pattern);
-                  }
+                  if (event.response.pattern) setPattern(event.response.pattern);
                   break;
-
                 case 'error':
                   addMessage({ type: 'error', content: event.error });
                   break;
               }
             });
           } catch (err: any) {
-            addMessage({ type: 'error', content: `Error: ${err.message}` });
+            addMessage({ type: 'error', content: err.message });
           } finally {
             streamingRef.current = false;
             setIsStreaming(false);
@@ -394,13 +470,11 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
             } else {
               addMessage({ type: 'agent', content: response.message });
             }
-            if (response.pattern && response.pattern !== pattern) {
-              setPattern(response.pattern);
-            }
+            if (response.pattern && response.pattern !== pattern) setPattern(response.pattern);
             if (response.action === 'play') handlePlay();
             else if (response.action === 'stop') handleStop();
           } catch (err: any) {
-            addMessage({ type: 'error', content: `Agent error: ${err.message}` });
+            addMessage({ type: 'error', content: err.message });
           }
         })();
       }
@@ -411,15 +485,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
     if (key.backspace) {
       setInput(prev => {
         const next = prev.slice(0, -1);
-        // Close slash menu when input no longer starts with /
-        if (slashMenuOpen && !next.startsWith('/')) {
-          setSlashMenuOpen(false);
-        } else if (slashMenuOpen && next.startsWith('/')) {
-          const cmds = filterCommands(next);
-          setSlashCommands(cmds);
-          setSlashSelectedIndex(0);
-          if (cmds.length === 0) setSlashMenuOpen(false);
-        }
+        updateSuggestions(next);
         return next;
       });
       return;
@@ -432,44 +498,96 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
     if (inputKey.length > 0) {
       setInput(prev => {
         const next = prev + inputKey;
-        // Detect slash command start
-        if (next === '/') {
-          const cmds = filterCommands('/');
-          setSlashCommands(cmds);
-          setSlashSelectedIndex(0);
-          setSlashMenuOpen(true);
-        } else if (slashMenuOpen && next.startsWith('/')) {
-          const cmds = filterCommands(next);
-          setSlashCommands(cmds);
-          setSlashSelectedIndex(0);
-          if (cmds.length === 0) setSlashMenuOpen(false);
-        }
+        updateSuggestions(next);
         return next;
       });
     }
   });
 
-  // Layout: status bar (top) + main row (left: editor+input, right: message sidebar)
-  const sidebarWidth = Math.max(20, Math.min(50, Math.floor(columns * 0.28)));
+  // ── Layout ──
+  const sidebarWidth = Math.max(28, Math.min(50, Math.floor(columns * 0.32)));
+  const mainWidth = columns - sidebarWidth;
+
+  const headerHeight = 3;
+  const inputHeight = 1;
+  const footerHeight = 1;
+  const bottomPad = 1; // breathing room below footer (like Claude Code)
+  // Suggestions take 1 line per visible command (max 5) + 1 separator
+  const suggestionHeight = suggestions.length > 0 ? Math.min(suggestions.length, 5) + 1 : 0;
+  const chromeHeight = headerHeight + inputHeight + footerHeight + bottomPad + suggestionHeight;
+  const contentHeight = rows - chromeHeight;
 
   return (
-    <Box flexDirection="column" height={rows}>
-      <StatusBar playing={playing} bpm={bpm} patternName={patternName} mode={agentRef.current.hasLLM ? 'llm' : 'keyword'} streaming={isStreaming} />
-      <Box flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column" flexGrow={1}>
-          <PatternEditor code={pattern} />
-          <Box flexGrow={1} />
-          {slashMenuOpen && slashCommands.length > 0 && (
-            <SlashCommandMenu
-              commands={slashCommands}
-              selectedIndex={slashSelectedIndex}
-              maxWidth={columns - sidebarWidth}
-            />
-          )}
-          <InputBox value={input} />
+    <Box flexDirection="column" width={columns} height={rows}>
+      {/* ── Header ── */}
+      <StatusBar
+        playing={playing}
+        bpm={bpm}
+        patternName={patternName}
+        mode={agentRef.current.hasLLM ? 'llm' : 'keyword'}
+        streaming={isStreaming}
+        model={modelName}
+        width={columns}
+      />
+
+      {/* ── Content: pattern + chat (or config panel overlay) ── */}
+      {configPanel ? (
+        <Box flexDirection="column" height={contentHeight} paddingX={1} paddingTop={1}>
+          <InlineConfig
+            mode={configPanel}
+            onClose={handleConfigClose}
+            width={columns}
+            height={contentHeight}
+          />
         </Box>
-        <MessageHistory messages={messages} height={rows - 2} width={sidebarWidth} />
+      ) : (
+        <Box flexDirection="row" height={contentHeight}>
+          <PatternEditor code={pattern} maxWidth={mainWidth} />
+          <MessageHistory messages={messages} height={contentHeight} width={sidebarWidth} />
+        </Box>
+      )}
+
+      {/* ── Autocomplete suggestions (above input) ── */}
+      {suggestions.length > 0 && (
+        <Box flexDirection="column" paddingX={1}>
+          <Text color={colors.border}>{'─'.repeat(columns - 2)}</Text>
+          {suggestions.slice(0, 5).map((cmd, idx) => {
+            const isSelected = idx === suggestionIndex;
+            const pad = Math.max(1, 18 - cmd.name.length);
+            return (
+              <Text key={cmd.name}>
+                <Text color={isSelected ? colors.primary : colors.textMuted}>
+                  {isSelected ? '▸' : ' '}
+                </Text>
+                <Text color={isSelected ? colors.primary : colors.text} bold={isSelected}>
+                  {' '}{cmd.name}
+                </Text>
+                <Text>{' '.repeat(pad)}</Text>
+                <Text color={colors.textDim}>{cmd.description}</Text>
+              </Text>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* ── Input (always at bottom) ── */}
+      <Box paddingX={1}>
+        <Text color={colors.primary} bold>{'>'} </Text>
+        <Text>{input}</Text>
+        <Text color={colors.textDim}>▌</Text>
       </Box>
+
+      {/* ── Footer ── */}
+      <Box paddingX={1}>
+        <Text color={colors.textMuted}>
+          {agentRef.current.hasLLM ? '◆ AI' : '◇ keyword'}
+          {'  ·  '}ctrl+p play{'  ·  '}ctrl+s save{'  ·  '}/help
+          {suggestions.length > 0 ? '  ·  tab select' : ''}
+        </Text>
+      </Box>
+
+      {/* ── Bottom padding (breathing room) ── */}
+      <Box height={bottomPad} />
     </Box>
   );
 };

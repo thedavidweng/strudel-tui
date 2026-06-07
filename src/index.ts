@@ -66,7 +66,13 @@ const configCmd = defineCommand({
         description: 'Interactive configuration setup wizard',
       },
       run() {
-        render(createElement(ConfigWizard));
+        process.stdout.write('\x1b[?1049h');
+        process.stdout.write('\x1b[2J\x1b[H');
+        const { unmount, waitUntilExit } = render(createElement(ConfigWizard));
+        const restore = () => { unmount(); process.stdout.write('\x1b[?1049l'); };
+        process.on('SIGTERM', restore);
+        process.on('SIGHUP', restore);
+        waitUntilExit().then(restore);
       },
     }),
   },
@@ -157,7 +163,11 @@ const main = defineCommand({
       if (configOverrides.apiKey) console.error('[debug] API key configured');
     }
 
-    render(
+    // Enter alternate screen buffer (fullscreen mode)
+    process.stdout.write('\x1b[?1049h');
+    process.stdout.write('\x1b[2J\x1b[H');
+
+    const { unmount, waitUntilExit } = render(
       createElement(App, {
         initialPattern,
         bpm,
@@ -165,6 +175,17 @@ const main = defineCommand({
         configOverrides,
       }),
     );
+
+    // Leave alternate screen on exit
+    const restoreScreen = () => {
+      unmount();
+      process.stdout.write('\x1b[?1049l');
+    };
+    process.on('SIGTERM', restoreScreen);
+    process.on('SIGHUP', restoreScreen);
+
+    await waitUntilExit();
+    restoreScreen();
   },
 });
 

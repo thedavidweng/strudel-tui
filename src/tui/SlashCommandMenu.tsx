@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { colors } from './theme.js';
 
 export interface SlashCommand {
   name: string;
@@ -8,20 +9,20 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: '/play', description: 'Start playback of the current pattern', alias: ['/start', '/go'] },
-  { name: '/stop', description: 'Stop all playing patterns', alias: ['/pause', '/hush'] },
-  { name: '/make', description: 'Generate a pattern from a description', alias: ['/create'] },
-  { name: '/edit', description: 'Edit the current pattern', alias: ['/change'] },
-  { name: '/validate', description: 'Validate the current pattern', alias: ['/check'] },
-  { name: '/undo', description: 'Revert to the previous pattern' },
-  { name: '/redo', description: 'Re-apply the last undone change' },
-  { name: '/save', description: 'Save the current pattern to a file' },
-  { name: '/load', description: 'Load a pattern file by name' },
-  { name: '/config', description: 'Show current AI provider configuration' },
-  { name: '/provider', description: 'Switch AI provider (OpenAI, DeepSeek, etc.)' },
-  { name: '/clear', description: 'Clear the message history', alias: ['/cls'] },
-  { name: '/help', description: 'Show available commands and shortcuts' },
-  { name: '/quit', description: 'Exit the application', alias: ['/exit', '/q'] },
+  { name: '/play', description: 'Start playback', alias: ['/start', '/go'] },
+  { name: '/stop', description: 'Stop playback', alias: ['/pause', '/hush'] },
+  { name: '/make', description: 'Generate a pattern', alias: ['/create'] },
+  { name: '/edit', description: 'Edit the pattern', alias: ['/change'] },
+  { name: '/validate', description: 'Validate pattern', alias: ['/check'] },
+  { name: '/undo', description: 'Revert to previous' },
+  { name: '/redo', description: 'Re-apply last change' },
+  { name: '/save', description: 'Save to file' },
+  { name: '/load', description: 'Load a file' },
+  { name: '/config', description: 'Show AI config' },
+  { name: '/provider', description: 'Switch AI provider' },
+  { name: '/clear', description: 'Clear chat', alias: ['/cls'] },
+  { name: '/help', description: 'Show commands' },
+  { name: '/quit', description: 'Exit', alias: ['/exit', '/q'] },
 ];
 
 export function filterCommands(query: string): SlashCommand[] {
@@ -40,26 +41,34 @@ interface SlashCommandMenuProps {
   maxWidth: number;
 }
 
+/**
+ * Slash command menu — clean, no box borders, matching Claude Code's open feel.
+ */
 const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({ commands, selectedIndex, maxWidth }) => {
   if (commands.length === 0) return null;
 
-  const descWidth = Math.max(20, maxWidth - 22);
-
   return (
-    <Box flexDirection="column" borderStyle="round" paddingX={1}>
-      {commands.map((cmd, idx) => (
-        <Text key={cmd.name}>
-          <Text color={idx === selectedIndex ? 'cyan' : 'white'} bold={idx === selectedIndex}>
-            {cmd.name}
+    <Box flexDirection="column" width={maxWidth} paddingX={1}>
+      <Text color={colors.border}>{'─'.repeat(maxWidth - 2)}</Text>
+      {commands.map((cmd, idx) => {
+        const isSelected = idx === selectedIndex;
+        const pad = Math.max(1, 18 - cmd.name.length);
+        return (
+          <Text key={cmd.name}>
+            <Text color={isSelected ? colors.primary : colors.textMuted}>
+              {isSelected ? '▸' : ' '}
+            </Text>
+            <Text color={isSelected ? colors.primary : colors.text} bold={isSelected}>
+              {' '}{cmd.name}
+            </Text>
+            <Text>{' '.repeat(pad)}</Text>
+            <Text color={colors.textDim}>
+              {cmd.description}
+            </Text>
           </Text>
-          <Text color="gray">{' '.repeat(Math.max(1, 22 - cmd.name.length))}</Text>
-          <Text color={idx === selectedIndex ? 'white' : 'gray'}>
-            {cmd.description.length > descWidth
-              ? cmd.description.slice(0, descWidth - 1) + '…'
-              : cmd.description}
-          </Text>
-        </Text>
-      ))}
+        );
+      })}
+      <Text color={colors.border}>{'─'.repeat(maxWidth - 2)}</Text>
     </Box>
   );
 };

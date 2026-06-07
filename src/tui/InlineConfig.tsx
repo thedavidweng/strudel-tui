@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useApp } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
 import { ConfigManager } from '../config/ConfigManager.js';
@@ -7,16 +7,8 @@ import { fetchModels, type ModelInfo } from '../llm/OpenAIClient.js';
 import { colors } from './theme.js';
 import MoonSpinner from './MoonSpinner.js';
 
-// Animated loading with moon spinner
-const LoadingDots: React.FC<{ text: string }> = ({ text }) => (
-  <Box>
-    <MoonSpinner color={colors.primary} variant="braille" />
-    <Text color={colors.text}> {text}</Text>
-  </Box>
-);
-
 // ---------------------------------------------------------------------------
-// Provider presets
+// Provider presets (same as ConfigWizard)
 // ---------------------------------------------------------------------------
 
 interface ProviderPreset {
@@ -24,38 +16,52 @@ interface ProviderPreset {
   value: string;
   baseUrl: string;
   model: string;
-  fetchModels: boolean;
 }
 
 const PROVIDERS: ProviderPreset[] = [
-  { label: 'OpenAI', value: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', fetchModels: true },
-  { label: 'DeepSeek', value: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', fetchModels: true },
-  { label: 'Moonshot (Kimi)', value: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-auto', fetchModels: true },
-  { label: 'Zhipu (GLM)', value: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', fetchModels: true },
-  { label: 'Qwen (Tongyi)', value: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo', fetchModels: true },
-  { label: 'OpenRouter', value: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o', fetchModels: true },
-  { label: 'Custom (OpenAI Compatible)', value: 'custom', baseUrl: '', model: '', fetchModels: true },
+  { label: 'OpenAI', value: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
+  { label: 'DeepSeek', value: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  { label: 'Moonshot (Kimi)', value: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-auto' },
+  { label: 'Zhipu (GLM)', value: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { label: 'Qwen (Tongyi)', value: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo' },
+  { label: 'OpenRouter', value: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o' },
+  { label: 'Custom (OpenAI Compatible)', value: 'custom', baseUrl: '', model: '' },
 ];
 
 // ---------------------------------------------------------------------------
-// Wizard steps
+// Types
 // ---------------------------------------------------------------------------
 
-type Step = 'provider' | 'api-key' | 'base-url' | 'fetching-models' | 'select-model' | 'confirm';
+type ConfigStep = 'provider' | 'api-key' | 'base-url' | 'fetching-models' | 'select-model' | 'confirm';
+type Mode = 'config' | 'provider';
+
+interface Props {
+  mode: Mode;
+  onClose: (saved: boolean) => void;
+  width: number;
+  height: number;
+}
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-const ConfigWizard: React.FC = () => {
-  const { exit } = useApp();
-  const [step, setStep] = useState<Step>('provider');
+const InlineConfig: React.FC<Props> = ({ mode, onClose, width, height }) => {
+  // If mode is 'provider', start at provider step and jump to provider selection only
+  const [step, setStep] = useState<ConfigStep>(mode === 'provider' ? 'provider' : 'provider');
   const [provider, setProvider] = useState<ProviderPreset | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [model, setModel] = useState('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Block parent input while this panel is open
+  useInput((_input, key) => {
+    if (key.escape) {
+      onClose(false);
+    }
+  });
 
   // Fetch models when entering the fetching step
   useEffect(() => {
@@ -82,7 +88,7 @@ const ConfigWizard: React.FC = () => {
     })();
 
     return () => { cancelled = true; };
-  }, [step]);
+  }, [step, apiKey, baseUrl]);
 
   // --- Handlers ---
 
@@ -91,6 +97,16 @@ const ConfigWizard: React.FC = () => {
     setProvider(preset);
     setBaseUrl(preset.baseUrl);
     setModel(preset.model);
+
+    if (mode === 'provider') {
+      // Provider-only mode: save provider + baseUrl + model, skip API key
+      const config = new ConfigManager();
+      config.set('baseUrl', preset.baseUrl);
+      config.set('model', preset.model);
+      onClose(true);
+      return;
+    }
+
     setStep('api-key');
   };
 
@@ -124,34 +140,40 @@ const ConfigWizard: React.FC = () => {
       config.set('apiKey', apiKey);
       config.set('baseUrl', baseUrl);
       config.set('model', model);
-      exit();
+      onClose(true);
     } else {
-      exit();
+      onClose(false);
     }
-  };
-
-  const _handleSkipModels = () => {
-    setModels([]);
-    setStep('select-model');
   };
 
   const maskedKey = apiKey.length > 8
     ? apiKey.slice(0, 4) + '****' + apiKey.slice(-4)
     : '****';
 
+  const innerWidth = Math.min(width - 4, 60);
+
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={colors.primary} paddingX={1} width={innerWidth}>
+      {/* Header */}
       <Box marginBottom={1}>
-        <Text bold color={colors.primary}>strudel-tui config</Text>
+        <Text bold color={colors.primary}>
+          {mode === 'provider' ? 'Switch Provider' : 'AI Configuration'}
+        </Text>
+        <Text color={colors.textDim}>  (esc to cancel)</Text>
       </Box>
-      <Text color={colors.border}>{'─'.repeat(50)}</Text>
 
       {/* Step 1: Select provider */}
       {step === 'provider' && (
         <Box flexDirection="column">
-          <Text>Select an AI provider:</Text>
+          <Text color={colors.text}>Select an AI provider:</Text>
+          <Box marginTop={1} flexDirection="column">
+            <SelectInput
+              items={PROVIDERS.map(p => ({ label: p.label, value: p.value }))}
+              onSelect={handleProviderSelect}
+            />
+          </Box>
           <Box marginTop={1}>
-            <SelectInput items={PROVIDERS.map(p => ({ label: p.label, value: p.value }))} onSelect={handleProviderSelect} />
+            <Text color={colors.textMuted} dimColor>Arrow keys to navigate, Enter to select</Text>
           </Box>
         </Box>
       )}
@@ -159,7 +181,7 @@ const ConfigWizard: React.FC = () => {
       {/* Step 2: Enter API key */}
       {step === 'api-key' && (
         <Box flexDirection="column">
-          <Text>
+          <Text color={colors.text}>
             Enter API key for <Text bold color={colors.primary}>{provider?.label}</Text>:
           </Text>
           <Box marginTop={1}>
@@ -177,10 +199,10 @@ const ConfigWizard: React.FC = () => {
         </Box>
       )}
 
-      {/* Step 3: Custom base URL (only for custom provider) */}
+      {/* Step 3: Custom base URL */}
       {step === 'base-url' && (
         <Box flexDirection="column">
-          <Text>Enter API base URL:</Text>
+          <Text color={colors.text}>Enter API base URL:</Text>
           <Box marginTop={1}>
             <Text color={colors.textDim}>URL: </Text>
             <TextInput
@@ -197,8 +219,9 @@ const ConfigWizard: React.FC = () => {
 
       {/* Step 4: Fetching models */}
       {step === 'fetching-models' && (
-        <Box flexDirection="column">
-          <LoadingDots text={`Fetching models from ${baseUrl}`} />
+        <Box>
+          <MoonSpinner color={colors.primary} variant="braille" />
+          <Text color={colors.text}> Fetching models from {baseUrl}</Text>
         </Box>
       )}
 
@@ -213,7 +236,7 @@ const ConfigWizard: React.FC = () => {
 
           {models.length > 0 ? (
             <Box flexDirection="column">
-              <Text>Select a model ({models.length} available):</Text>
+              <Text color={colors.text}>Select a model ({models.length} available):</Text>
               <Box marginTop={1} flexDirection="column">
                 <SelectInput
                   items={models.map(m => ({
@@ -221,16 +244,16 @@ const ConfigWizard: React.FC = () => {
                     value: m.id,
                   }))}
                   onSelect={handleModelSelect}
-                  limit={15}
+                  limit={Math.min(15, height - 10)}
                 />
               </Box>
               <Box marginTop={1}>
-                <Text color={colors.textMuted} dimColor>Use arrow keys to browse, Enter to select</Text>
+                <Text color={colors.textMuted} dimColor>Arrow keys to browse, Enter to select</Text>
               </Box>
             </Box>
           ) : (
             <Box flexDirection="column">
-              <Text>Enter model name:</Text>
+              <Text color={colors.text}>Enter model name:</Text>
               <Box marginTop={1}>
                 <Text color={colors.textDim}>Model: </Text>
                 <TextInput
@@ -250,15 +273,15 @@ const ConfigWizard: React.FC = () => {
       {/* Step 6: Confirm */}
       {step === 'confirm' && (
         <Box flexDirection="column">
-          <Text bold>Configuration summary:</Text>
+          <Text bold color={colors.text}>Configuration summary:</Text>
           <Box marginTop={1} flexDirection="column">
-            <Text>  Provider:  <Text color={colors.primary}>{provider?.label}</Text></Text>
-            <Text>  API Key:   <Text color={colors.warning}>{maskedKey}</Text></Text>
-            <Text>  Base URL:  <Text color={colors.success}>{baseUrl}</Text></Text>
-            <Text>  Model:     <Text color={colors.success}>{model}</Text></Text>
+            <Text color={colors.text}>  Provider:  <Text color={colors.primary}>{provider?.label}</Text></Text>
+            <Text color={colors.text}>  API Key:   <Text color={colors.warning}>{maskedKey}</Text></Text>
+            <Text color={colors.text}>  Base URL:  <Text color={colors.success}>{baseUrl}</Text></Text>
+            <Text color={colors.text}>  Model:     <Text color={colors.success}>{model}</Text></Text>
           </Box>
           <Box marginTop={1}>
-            <Text>Save this configuration?</Text>
+            <Text color={colors.text}>Save this configuration?</Text>
           </Box>
           <Box marginTop={1}>
             <SelectInput
@@ -275,4 +298,4 @@ const ConfigWizard: React.FC = () => {
   );
 };
 
-export default ConfigWizard;
+export default InlineConfig;

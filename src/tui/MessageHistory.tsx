@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { colors } from './theme.js';
 
 export type MessageType = 'user' | 'agent' | 'error' | 'system' | 'tool';
 
@@ -14,20 +15,19 @@ interface MessageHistoryProps {
   width?: number;
 }
 
-// Kimi-code style: colored bullets instead of plain prefixes
+// Clean message styling — minimal, matching Claude Code's open feel
 const TYPE_STYLE: Record<MessageType, { symbol: string; color: string }> = {
-  user:   { symbol: '✦', color: '#f59e0b' },  // amber
-  agent:  { symbol: '●', color: '#22c55e' },  // green
-  error:  { symbol: '✗', color: '#ef4444' },  // red
-  system: { symbol: '◆', color: '#6b7280' },  // gray
-  tool:   { symbol: '▸', color: '#3b82f6' },  // blue
+  user:   { symbol: '✦', color: colors.roleUser },
+  agent:  { symbol: '●', color: colors.text },
+  error:  { symbol: '✗', color: colors.error },
+  system: { symbol: '◆', color: colors.textMuted },
+  tool:   { symbol: '▸', color: colors.roleTool },
 };
 
 const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height, width }) => {
   const maxVisible = Math.max(1, height - 2);
   const visible = messages.slice(-maxVisible);
-  // Account for border (2) + paddingX (2) = 4 chars overhead
-  const textWidth = width ? Math.max(10, width - 4) : undefined;
+  const textWidth = width ? Math.max(10, width - 2) : undefined;
 
   const truncate = (text: string): string => {
     if (!textWidth || text.length <= textWidth) return text;
@@ -35,17 +35,18 @@ const MessageHistory: React.FC<MessageHistoryProps> = ({ messages, height, width
   };
 
   return (
-    <Box flexDirection="column" borderStyle="round" paddingX={1} width={width} flexShrink={0}>
+    <Box flexDirection="column" width={width} flexShrink={0}>
       {visible.length === 0 ? (
-        <Text color="gray" dimColor>Type a message or / for commands</Text>
+        <Text color={colors.textMuted}>  No messages yet</Text>
       ) : (
         visible.map((msg, idx) => {
           const style = TYPE_STYLE[msg.type];
+          const content = truncate(msg.content);
           return (
             <Text key={idx} wrap="truncate">
               <Text color={style.color}> {style.symbol} </Text>
-              <Text color={msg.type === 'system' ? 'gray' : 'white'}>
-                {truncate(msg.content)}
+              <Text color={msg.type === 'system' ? colors.textDim : colors.text}>
+                {content}
               </Text>
             </Text>
           );
