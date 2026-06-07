@@ -1,0 +1,9 @@
+setcps(130/60/4);
+
+// Kick drum every beat
+$kick = s("bd*4");
+
+// Hi‑hat pattern
+$hat = s("hh*8") | gain(0.5);
+
+kick + hat;

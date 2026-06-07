@@ -1,0 +1,9 @@
+// Breakbeat rhythm pattern
+setcps(140/60/4);
+
+$kick = s("[bd bd] [~ bd] bd [~ bd]");
+$snare = s("[~ sd] [~ sd:2] [~ sd] [sd ~]");
+$hat = s("hh*16") | gain(0.3);
+$perc = s("[~ cp] ~ [~ cp:2] ~").gain(0.5);
+
+kick + snare + hat + perc;

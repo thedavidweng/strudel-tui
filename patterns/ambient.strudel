@@ -1,0 +1,8 @@
+// Slow ambient pad pattern
+setcps(60/60/4);
+
+$pad = note("<c3 e3 g3 b3>").sound("sine").slow(4).gain(0.6);
+$texture = note("<c4 e4 g4>").sound("triangle").slow(8).gain(0.3).lpf(800);
+$sub = note("c2").sound("sine").slow(2).gain(0.4);
+
+pad + texture + sub;

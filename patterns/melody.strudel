@@ -1,0 +1,8 @@
+// Simple melodic pattern with call and response
+setcps(110/60/4);
+
+$melody = note("<[c4 e4 g4] [d4 f4 a4] [e4 g4 b4] [c5 b4 g4]>").sound("triangle").gain(0.6);
+$bass = note("<c2 c2 d2 e2>").sound("sawtooth").gain(0.3).lpf(400);
+$hats = s("hh*8") | gain(0.2);
+
+melody + bass + hats;

@@ -1,0 +1,8 @@
+// Basic 4/4 kick and snare pattern
+setcps(120/60/4);
+
+$kick = s("bd*4");
+$snare = s("[- sd]*2");
+$hat = s("hh*8") | gain(0.4);
+
+kick + snare + hat;

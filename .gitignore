@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Bun
+bun.lockb
+
+# Build outputs
+bin/
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# strudel-tui user data
+.strudel-tui/

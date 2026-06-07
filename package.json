@@ -1,0 +1,26 @@
+{
+  "name": "strudel-tui",
+  "version": "0.1.0",
+  "description": "Terminal based live coding interface for Strudel.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "strudel-tui": "bin/strudel-tui"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "build": "bun build src/index.ts --compile --outfile bin/strudel-tui"
+  },
+  "dependencies": {
+    "@strudel/core": "latest",
+    "@strudel/mini": "latest",
+    "@strudel/transpiler": "latest",
+    "citty": "latest",
+    "ink": "latest",
+    "ink-select-input": "^6.2.0",
+    "ink-text-input": "^6.0.0",
+    "react-devtools-core": "^7.0.1"
+  }
+}

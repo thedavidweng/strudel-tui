@@ -1,0 +1,8 @@
+// Acid bassline pattern
+setcps(130/60/4);
+
+$bass = note("<[c2 ~ c3 ~] [e2 ~ e3 ~] [g2 ~ g3 ~] [b2 ~ b1 ~]>").sound("sawtooth").lpf(sine.range(200, 2000).slow(4)).lpq(12).gain(0.7);
+$kick = s("bd*4") | gain(0.8);
+$hat = s("[~ hh]*4") | gain(0.3);
+
+bass + kick + hat;
