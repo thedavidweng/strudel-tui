@@ -256,8 +256,7 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
   });
 
   // Layout: status bar (top) + main row (left: editor+input, right: message sidebar)
-  const sidebarWidth = Math.max(30, Math.min(50, Math.floor(columns * 0.35)));
-  const mainAreaRows = Math.max(6, rows - 2); // -2 for status bar top/bottom borders
+  const sidebarWidth = Math.max(20, Math.min(35, Math.floor(columns * 0.28)));
 
   return (
     <Box flexDirection="column" height={rows}>
@@ -265,9 +264,10 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
       <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column" flexGrow={1}>
           <PatternEditor code={pattern} />
+          <Box flexGrow={1} />
           <InputBox value={input} />
         </Box>
-        <MessageHistory messages={messages} height={mainAreaRows} width={sidebarWidth} />
+        <MessageHistory messages={messages} height={rows - 2} width={sidebarWidth} />
       </Box>
     </Box>
   );
