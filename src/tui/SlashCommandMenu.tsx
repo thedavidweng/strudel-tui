@@ -17,6 +17,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/redo', description: 'Re-apply the last undone change' },
   { name: '/save', description: 'Save the current pattern to a file' },
   { name: '/load', description: 'Load a pattern file by name' },
+  { name: '/config', description: 'Show current AI provider configuration' },
+  { name: '/provider', description: 'Switch AI provider (OpenAI, DeepSeek, etc.)' },
   { name: '/clear', description: 'Clear the message history', alias: ['/cls'] },
   { name: '/help', description: 'Show available commands and shortcuts' },
   { name: '/quit', description: 'Exit the application', alias: ['/exit', '/q'] },

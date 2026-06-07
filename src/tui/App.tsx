@@ -98,88 +98,111 @@ const App: React.FC<AppProps> = ({ initialPattern, bpm = 130, debug: _debug = fa
       // Keep the command in the input so user can type the argument
       setInput(cmdName + ' ');
       setSlashMenuOpen(false);
-    } else {
-      // Execute immediately
+      return;
+    }
+
+    // Commands handled locally (no agent needed)
+    if (cmdName === '/config') {
       setInput('');
       setSlashMenuOpen(false);
-      addMessage({ type: 'user', content: cmdName });
-
+      addMessage({ type: 'user', content: '/config' });
       const agent = agentRef.current;
-      agent.context.pattern = pattern;
-
       if (agent.hasLLM) {
-        streamingRef.current = true;
-        let streamingText = '';
-        (async () => {
-          try {
-            await agent.processUserMessageStreaming(cmdName, (event) => {
-              switch (event.type) {
-                case 'text_delta':
-                  streamingText += event.delta;
-                  setMessages(prev => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.type === 'agent' && last.content.endsWith('▌')) {
-                      return [...prev.slice(0, -1), { type: 'agent', content: streamingText + '▌' }];
-                    }
-                    return [...prev, { type: 'agent', content: streamingText + '▌' }];
-                  });
-                  break;
-                case 'tool_call':
-                  addMessage({ type: 'tool', content: `Calling ${event.name}(${JSON.stringify(event.args)})` });
-                  break;
-                case 'tool_result':
-                  setMessages(prev => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.type === 'tool' && last.content.startsWith('Calling')) {
-                      return [...prev.slice(0, -1), { type: 'tool', content: `${last.content} → ${event.result}` }];
-                    }
-                    return [...prev, { type: 'tool', content: `${event.name}: ${event.result}` }];
-                  });
-                  break;
-                case 'pattern_update':
-                  setPattern(event.pattern);
-                  break;
-                case 'done':
-                  setMessages(prev => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.type === 'agent' && last.content.endsWith('▌')) {
-                      return [...prev.slice(0, -1), { type: 'agent', content: event.response.message || streamingText }];
-                    }
-                    if (event.response.message && !streamingText) {
-                      return [...prev, { type: 'agent', content: event.response.message }];
-                    }
-                    return prev;
-                  });
-                  if (event.response.pattern) setPattern(event.response.pattern);
-                  break;
-                case 'error':
-                  addMessage({ type: 'error', content: event.error });
-                  break;
-              }
-            });
-          } catch (err: any) {
-            addMessage({ type: 'error', content: `Error: ${err.message}` });
-          } finally {
-            streamingRef.current = false;
-          }
-        })();
+        addMessage({ type: 'system', content: `AI agent: enabled\nLLM mode: streaming` });
       } else {
-        (async () => {
-          try {
-            const response = await agent.processUserMessage(cmdName);
-            if (response.error) {
-              addMessage({ type: 'error', content: response.message });
-            } else {
-              addMessage({ type: 'agent', content: response.message });
-            }
-            if (response.pattern && response.pattern !== pattern) setPattern(response.pattern);
-            if (response.action === 'play') handlePlay();
-            else if (response.action === 'stop') handleStop();
-          } catch (err: any) {
-            addMessage({ type: 'error', content: `Agent error: ${err.message}` });
-          }
-        })();
+        addMessage({ type: 'system', content: 'AI agent: disabled (keyword mode)\nRun "strudel-tui config set apiKey <key>" to enable.' });
       }
+      return;
+    }
+
+    if (cmdName === '/provider') {
+      setInput('');
+      setSlashMenuOpen(false);
+      addMessage({ type: 'user', content: '/provider' });
+      addMessage({ type: 'system', content: 'Providers: OpenAI, DeepSeek, Moonshot, Zhipu, Qwen, OpenRouter\nConfig: strudel-tui config init\nSet key:  strudel-tui config set apiKey <key>\nSet url:  strudel-tui config set baseUrl <url>\nSet model: strudel-tui config set model <name>' });
+      return;
+    }
+
+    // Execute immediately
+    setInput('');
+    setSlashMenuOpen(false);
+    addMessage({ type: 'user', content: cmdName });
+
+    const agent = agentRef.current;
+    agent.context.pattern = pattern;
+
+    if (agent.hasLLM) {
+      streamingRef.current = true;
+      let streamingText = '';
+      (async () => {
+        try {
+          await agent.processUserMessageStreaming(cmdName, (event) => {
+            switch (event.type) {
+              case 'text_delta':
+                streamingText += event.delta;
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.type === 'agent' && last.content.endsWith('▌')) {
+                    return [...prev.slice(0, -1), { type: 'agent', content: streamingText + '▌' }];
+                  }
+                  return [...prev, { type: 'agent', content: streamingText + '▌' }];
+                });
+                break;
+              case 'tool_call':
+                addMessage({ type: 'tool', content: `Calling ${event.name}(${JSON.stringify(event.args)})` });
+                break;
+              case 'tool_result':
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.type === 'tool' && last.content.startsWith('Calling')) {
+                    return [...prev.slice(0, -1), { type: 'tool', content: `${last.content} → ${event.result}` }];
+                  }
+                  return [...prev, { type: 'tool', content: `${event.name}: ${event.result}` }];
+                });
+                break;
+              case 'pattern_update':
+                setPattern(event.pattern);
+                break;
+              case 'done':
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.type === 'agent' && last.content.endsWith('▌')) {
+                    return [...prev.slice(0, -1), { type: 'agent', content: event.response.message || streamingText }];
+                  }
+                  if (event.response.message && !streamingText) {
+                    return [...prev, { type: 'agent', content: event.response.message }];
+                  }
+                  return prev;
+                });
+                if (event.response.pattern) setPattern(event.response.pattern);
+                break;
+              case 'error':
+                addMessage({ type: 'error', content: event.error });
+                break;
+            }
+          });
+        } catch (err: any) {
+          addMessage({ type: 'error', content: `Error: ${err.message}` });
+        } finally {
+          streamingRef.current = false;
+        }
+      })();
+    } else {
+      (async () => {
+        try {
+          const response = await agent.processUserMessage(cmdName);
+          if (response.error) {
+            addMessage({ type: 'error', content: response.message });
+          } else {
+            addMessage({ type: 'agent', content: response.message });
+          }
+          if (response.pattern && response.pattern !== pattern) setPattern(response.pattern);
+          if (response.action === 'play') handlePlay();
+          else if (response.action === 'stop') handleStop();
+        } catch (err: any) {
+          addMessage({ type: 'error', content: `Agent error: ${err.message}` });
+        }
+      })();
     }
   }, [pattern, addMessage, handlePlay, handleStop, setMessages]);
 
