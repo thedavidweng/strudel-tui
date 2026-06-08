@@ -150,7 +150,8 @@ export class StatusBar implements Component {
     const titleVis = visibleWidth(title);
     const tipVis = visibleWidth(tip);
     const gap = Math.max(2, width - titleVis - tipVis);
-    const line1 = styledTitle + ' '.repeat(gap) + styledTip;
+    const line1Raw = styledTitle + ' '.repeat(gap) + styledTip;
+    const line1 = truncateToWidth(line1Raw, width);
 
     // --- Line 2: status info ---
     const stateLabel = playing ? 'PLAYING' : 'STOPPED';
@@ -171,7 +172,8 @@ export class StatusBar implements Component {
       ? chalk.hex(colors.textDim)(model)
       : chalk.hex(colors.warning)('model not set — /config');
 
-    const line2 = stateStyled + sep + bpmStyled + sep + patternStyled + sep + modeStyled + sep + modelText;
+    const line2Raw = stateStyled + sep + bpmStyled + sep + patternStyled + sep + modeStyled + sep + modelText;
+    const line2 = truncateToWidth(line2Raw, width);
 
     // --- Line 3: separator ---
     const line3 = chalk.hex(colors.border)('─'.repeat(width));

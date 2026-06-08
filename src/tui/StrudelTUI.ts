@@ -439,7 +439,6 @@ export class StrudelTUI {
     const direct: Record<string, () => void | Promise<void>> = {
       '/play': () => {
         void this.handlePlay();
-        this.addMessage('system', 'Playing');
       },
       '/stop': () => {
         void this.handleStop();
@@ -626,11 +625,13 @@ export class StrudelTUI {
 
   private async handlePlay(): Promise<void> {
     try {
+      this.addMessage('system', 'Starting audio engine...');
       await this.audio.play(this.pattern);
       this.playing = true;
       this.statusBar.update({ playing: true });
       this.patternPanel.setPlaying(true);
       this.tui.requestRender();
+      this.addMessage('system', 'Playing');
     } catch (err: any) {
       this.addMessage('error', `Playback error: ${err.message}`);
     }
@@ -651,10 +652,8 @@ export class StrudelTUI {
   private async handlePlayToggle(): Promise<void> {
     if (this.playing) {
       await this.handleStop();
-      this.addMessage('system', 'Stopped');
     } else {
       await this.handlePlay();
-      this.addMessage('system', 'Playing');
     }
   }
 
