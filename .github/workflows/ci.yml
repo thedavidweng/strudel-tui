@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -46,6 +47,15 @@ jobs:
           name: coverage-${{ matrix.os }}
           path: coverage/
           retention-days: 7
+
+      - name: Upload coverage to Codecov
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: coverage
+          flags: ${{ matrix.os }}
+          fail_ci_if_error: false
 
       - run: bun run build
 
