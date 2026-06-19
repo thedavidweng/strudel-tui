@@ -50,7 +50,6 @@ jobs:
           gh release create "$TAG" --draft \
             --title "$TAG" \
             --notes "${NOTES:-Release $TAG}" \
-            --verify-tag
 
       - name: Push tag
         if: ${{ steps.check.outputs.release_created == 'true' }}
