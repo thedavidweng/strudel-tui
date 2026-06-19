@@ -33,9 +33,3 @@ release-snapshot: ## Create a snapshot release (no publish)
 
 clean: ## Remove build artifacts
 	rm -rf bin/ build/ dist/
-
-changelog:
-	git cliff -o CHANGELOG.md
-
-changelog-preview:
-	git cliff --latest
