@@ -49,12 +49,12 @@ jobs:
           fi
           git tag "$TAG"
           git push origin "$TAG"
-          INSTALL='# Installation
+                    INSTALL="# Installation
 
           ```bash
           # Homebrew (macOS)
           brew install --cask thedavidweng/tap/strudel-tui
-          ```'
+          ```"
           FULL_NOTES="${NOTES:-Release $TAG}
 
           ${INSTALL}"
