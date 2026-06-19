@@ -60,28 +60,6 @@ release:
   github:
     owner: thedavidweng
     name: strudel-tui
-  header: |
-    ## Installation
-
-    **Homebrew (macOS):**
-    ```
-    brew tap thedavidweng/tap
-    brew install --cask strudel-tui
-    ```
-
-    **Pre-built binaries:** Download below and verify with `checksums.txt`.
-
-    ## Verify signatures
-
-    This release is signed with [Sigstore](https://sigstore.dev) keyless signing.
-    To verify the checksums file:
-    ```
-    cosign verify-blob \
-      --bundle checksums.txt.sig \
-      --certificate-identity-regexp="https://github.com/thedavidweng/strudel-tui" \
-      --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-      checksums.txt
-    ```
 
 homebrew_casks:
   - name: strudel-tui
