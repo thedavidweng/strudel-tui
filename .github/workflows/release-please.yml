@@ -40,10 +40,10 @@ jobs:
           INSTALL=$(cat <<'EOF'
 # Installation
 
-\`\`\`bash
+```bash
 # Homebrew (macOS)
 brew install --cask thedavidweng/tap/strudel-tui
-\`\`\`
+```
 EOF
           )
           FULL_NOTES="${NOTES:-Release $TAG}
