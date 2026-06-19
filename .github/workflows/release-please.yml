@@ -37,18 +37,18 @@ jobs:
           if [ -f CHANGELOG.md ]; then
             NOTES=$(awk "/^## \[${ESCAPED_VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md || true)
           fi
-                    INSTALL=$(cat <<'EOF'
-          # Installation
+          INSTALL=$(cat <<'EOF'
+# Installation
 
-          ```bash
-          # Homebrew (macOS)
-          brew install --cask thedavidweng/tap/strudel-tui
-          ```
-          EOF
+\`\`\`bash
+# Homebrew (macOS)
+brew install --cask thedavidweng/tap/strudel-tui
+\`\`\`
+EOF
           )
           FULL_NOTES="${NOTES:-Release $TAG}
 
-          ${INSTALL}"
+${INSTALL}"
           gh release create "$TAG" \
             --title "$TAG" \
             --notes "${FULL_NOTES}"
