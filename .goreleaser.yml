@@ -56,7 +56,7 @@ changelog:
   disable: true
 
 release:
-  mode: append
+  mode: keep-existing
   github:
     owner: thedavidweng
     name: strudel-tui

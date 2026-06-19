@@ -23,7 +23,7 @@ jobs:
         run: |
           set -e
           MANIFEST_VERSION=$(jq -r '."."' .release-please-manifest.json)
-          LATEST_TAG=$(git tag --sort=-v:refname | head -1)
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1)
           LATEST_VERSION="${LATEST_TAG#v}"
           if [ "$MANIFEST_VERSION" = "$LATEST_VERSION" ]; then
             echo "No release needed (manifest=$MANIFEST_VERSION, tag=$LATEST_VERSION)"
