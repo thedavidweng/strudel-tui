@@ -7,6 +7,7 @@ Thanks for your interest in contributing.
 ```bash
 git clone https://github.com/thedavidweng/strudel-tui.git
 cd strudel-tui
+mise install  # install tools pinned in mise.toml
 bun install
 ```
 
