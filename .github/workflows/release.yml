@@ -58,22 +58,6 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          echo "Waiting for release $TAG to exist..."
-          for i in $(seq 1 30); do
-            if gh release view "$TAG" &>/dev/null; then
-              echo "Release $TAG found after ~${i}0 seconds"
-              exit 0
-            fi
-            echo "Attempt $i/30: release not found yet, waiting 10s..."
-            sleep 10
-          done
-          echo "::warning::Release $TAG not found after 5 minutes, proceeding anyway"
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
