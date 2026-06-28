@@ -15,7 +15,7 @@
     "postinstall": "node scripts/patch-kabelsalat.cjs"
   },
   "dependencies": {
-    "@earendil-works/pi-tui": "^0.78.1",
+    "@earendil-works/pi-tui": "^0.80.2",
     "@kabelsalat/web": "^0.4.1",
     "@strudel/core": "latest",
     "@strudel/mini": "latest",
