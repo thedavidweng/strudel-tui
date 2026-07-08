@@ -238,10 +238,7 @@ describe('PatternPanel edit mode', () => {
     test('at col 0, joins with previous line', () => {
       panel.setPattern('first\nsecond');
       panel.enterEditMode();
-      // Move to start of 'second' line: cursor at end of last line => up => now on 'second'
-      // Then move to col 0: press left enough times
-      panel.handleInput(KEY.up); // now on 'second'
-      // Move cursor to col 0 of 'second'
+      // Cursor is at end of 'second' (last line). Move to col 0.
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);

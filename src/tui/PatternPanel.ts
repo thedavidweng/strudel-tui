@@ -9,7 +9,7 @@
  */
 
 import chalk from 'chalk';
-import { Component, visibleWidth, truncateToWidth } from '@earendil-works/pi-tui';
+import { Component, visibleWidth, truncateToWidth, decodeKittyPrintable, Key, matchesKey } from '@earendil-works/pi-tui';
 import { colors } from './theme.js';
 
 const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -99,15 +99,27 @@ export class PatternPanel implements Component {
   private _playing = false;
   private _spinTick = 0;
 
+  // Edit mode state
+  private _editMode = false;
+  private _cursorLine = 0;
+  private _cursorCol = 0;
+  private _editBuffer: string[] = [];
+  private _originalPattern = '';
+  private _scrollOffset = 0;
+
+  /** Called when user saves with Ctrl+X. Receives the edited pattern text. */
+  onApply: ((pattern: string) => void) | null = null;
+
   setInvalidate(fn: () => void): void {
     this._invalidate = fn;
   }
 
-  render(width: number): string[] {
+  render(width: number, height?: number): string[] {
     const lines: string[] = [];
     const panelWidth = Math.max(20, width);
 
     // --- Title bar: ┌ Pattern Editor ────────
+    const modeLabel = this._editMode ? ' editing ' : '';
     const playingLabel = this._playing
       ? chalk.hex(colors.playing).bold(` ${BRAILLE_DOTS[this._spinTick % BRAILLE_DOTS.length]} playing `)
       : chalk.hex(colors.stopped)(' stopped ');
@@ -116,33 +128,70 @@ export class PatternPanel implements Component {
     const titleText = ' Pattern Editor ';
     const titleVis = visibleWidth(titleText);
     const playingVis = visibleWidth(this._playing ? ` ${BRAILLE_DOTS[0]} playing ` : ' stopped ');
+    const modeVis = this._editMode ? visibleWidth(modeLabel) : 0;
     const borderVis = 2; // ┌ and ┐
     const gap = 1; // space before playing label
-    const dashCount = Math.max(1, panelWidth - borderVis - titleVis - playingVis - gap);
-    const topBorder = chalk.hex(colors.border)('┌') + chalk.hex(colors.primary).bold(titleText) + chalk.hex(colors.border)('─'.repeat(dashCount)) + ' ' + playingLabel + chalk.hex(colors.border)('┐');
+    const dashCount = Math.max(1, panelWidth - borderVis - titleVis - modeVis - playingVis - gap);
+    let topBorder = chalk.hex(colors.border)('┌') + chalk.hex(colors.primary).bold(titleText);
+    if (this._editMode) {
+      const modeDash = Math.floor(Math.max(0, dashCount - modeVis) / 2);
+      topBorder += chalk.hex(colors.border)('─'.repeat(modeDash));
+      topBorder += chalk.hex(colors.warning)(modeLabel);
+      topBorder += chalk.hex(colors.border)('─'.repeat(Math.max(0, dashCount - modeDash - modeVis)));
+    } else {
+      topBorder += chalk.hex(colors.border)('─'.repeat(dashCount));
+    }
+    topBorder += ' ' + playingLabel + chalk.hex(colors.border)('┐');
     lines.push(topBorder);
 
     // --- Pattern lines ---
-    const patternLines = this._pattern.split('\n');
+    const sourceLines = this._editMode ? this._editBuffer : this._pattern.split('\n');
+    const patternLines = sourceLines.length === 0 ? [''] : sourceLines;
     const gutterWidth = String(patternLines.length).length;
     const prefixOverhead = gutterWidth + 4; // gutter + " │ " + space
     const contentMax = Math.max(10, panelWidth - prefixOverhead - 2); // -2 for borders
+
+    // Calculate visible area (reserve 1 line for help bar in edit mode)
+    const helpBarLines = this._editMode ? 1 : 0;
+    const availableHeight = Math.max(1, (height ?? 20) - 2 - helpBarLines);
+
+    // Adjust scroll offset to keep cursor visible
+    if (this._editMode) {
+      if (this._cursorLine < this._scrollOffset) {
+        this._scrollOffset = this._cursorLine;
+      } else if (this._cursorLine >= this._scrollOffset + availableHeight) {
+        this._scrollOffset = this._cursorLine - availableHeight + 1;
+      }
+    }
+
+    const startLine = this._editMode ? this._scrollOffset : 0;
+    const endLine = this._editMode ? Math.min(patternLines.length, startLine + availableHeight) : patternLines.length;
 
     if (patternLines.length === 0 || (patternLines.length === 1 && patternLines[0] === '')) {
       const emptyContent = chalk.hex(colors.textMuted)(' (no pattern)');
       const pad = Math.max(0, panelWidth - visibleWidth(emptyContent) - 2);
       lines.push(chalk.hex(colors.border)('│') + emptyContent + ' '.repeat(pad) + chalk.hex(colors.border)('│'));
     } else {
-      for (let i = 0; i < patternLines.length; i++) {
+      for (let i = startLine; i < endLine; i++) {
         const lineNum = String(i + 1).padStart(gutterWidth, ' ');
         const raw = patternLines[i]!;
         const truncated = raw.length > contentMax ? raw.slice(0, contentMax - 1) + '…' : raw;
-        let highlighted = highlightLine(truncated);
-        const gutter = chalk.hex(colors.textMuted)(`${lineNum}`);
+
+        // Gutter: > for current line in edit mode, space otherwise
+        const gutterIndicator = this._editMode && i === this._cursorLine ? '>' : ' ';
+        const gutter = chalk.hex(colors.textMuted)(`${gutterIndicator}${lineNum}`);
+
         const pipe = chalk.hex(colors.border)(' │ ');
+
+        let highlighted: string;
+        if (this._editMode && i === this._cursorLine) {
+          highlighted = this.renderLineWithCursor(truncated, contentMax);
+        } else {
+          highlighted = highlightLine(truncated);
+        }
+
         let content = gutter + pipe + highlighted;
         let contentVis = visibleWidth(content);
-        // Safety: truncate highlighted content if it still exceeds panel width
         if (contentVis > panelWidth - 2) {
           const maxHighlightWidth = contentMax - (contentVis - visibleWidth(highlighted));
           highlighted = truncateToWidth(highlighted, maxHighlightWidth);
@@ -152,6 +201,15 @@ export class PatternPanel implements Component {
         const pad = Math.max(0, panelWidth - contentVis - 2);
         lines.push(chalk.hex(colors.border)('│') + ' ' + content + ' '.repeat(pad) + chalk.hex(colors.border)('│'));
       }
+    }
+
+    // --- Help bar (edit mode only) ---
+    if (this._editMode) {
+      const helpText = ' ^X Save&Exit ^E Discard ';
+      const helpContent = chalk.hex(colors.textMuted)(helpText);
+      const helpVis = visibleWidth(helpText);
+      const helpPad = Math.max(0, panelWidth - helpVis - 2);
+      lines.push(chalk.hex(colors.border)('│') + helpContent + ' '.repeat(helpPad) + chalk.hex(colors.border)('│'));
     }
 
     // --- Bottom border: └───────────────────
@@ -168,6 +226,127 @@ export class PatternPanel implements Component {
   setPlaying(playing: boolean): void {
     this._playing = playing;
     this.invalidate();
+  }
+
+  enterEditMode(): void {
+    this._originalPattern = this._pattern;
+    this._editBuffer = this._pattern.split('\n');
+    if (this._editBuffer.length === 0) this._editBuffer = [''];
+    this._editMode = true;
+    this._cursorLine = this._editBuffer.length - 1;
+    this._cursorCol = this._editBuffer[this._cursorLine]!.length;
+    this._scrollOffset = 0;
+    this.invalidate();
+  }
+
+  exitEditMode(apply: boolean): string {
+    this._editMode = false;
+    if (apply) {
+      this._pattern = this._editBuffer.join('\n');
+    } else {
+      this._pattern = this._originalPattern;
+    }
+    this._editBuffer = [];
+    this._originalPattern = '';
+    this._scrollOffset = 0;
+    this.invalidate();
+    return this._pattern;
+  }
+
+  get editMode(): boolean {
+    return this._editMode;
+  }
+
+  handleInput(data: string): boolean {
+    if (!this._editMode) return false;
+
+    // Arrow keys
+    if (matchesKey(data, Key.up)) { this.moveCursor(-1, 0); return true; }
+    if (matchesKey(data, Key.down)) { this.moveCursor(1, 0); return true; }
+    if (matchesKey(data, Key.left)) { this.moveCursor(0, -1); return true; }
+    if (matchesKey(data, Key.right)) { this.moveCursor(0, 1); return true; }
+
+    // Home / End
+    if (matchesKey(data, Key.home)) { this._cursorCol = 0; this.invalidate(); return true; }
+    if (matchesKey(data, Key.end)) { this._cursorCol = this._editBuffer[this._cursorLine]!.length; this.invalidate(); return true; }
+
+    // Backspace
+    if (matchesKey(data, Key.backspace)) {
+      if (this._cursorCol > 0) {
+        const line = this._editBuffer[this._cursorLine]!;
+        this._editBuffer[this._cursorLine] = line.slice(0, this._cursorCol - 1) + line.slice(this._cursorCol);
+        this._cursorCol--;
+      } else if (this._cursorLine > 0) {
+        const currentLine = this._editBuffer.splice(this._cursorLine, 1)[0]!;
+        this._cursorLine--;
+        this._cursorCol = this._editBuffer[this._cursorLine]!.length;
+        this._editBuffer[this._cursorLine] += currentLine;
+      }
+      this.invalidate();
+      return true;
+    }
+
+    // Delete
+    if (matchesKey(data, Key.delete)) {
+      const line = this._editBuffer[this._cursorLine]!;
+      if (this._cursorCol < line.length) {
+        this._editBuffer[this._cursorLine] = line.slice(0, this._cursorCol) + line.slice(this._cursorCol + 1);
+      } else if (this._cursorLine < this._editBuffer.length - 1) {
+        this._editBuffer[this._cursorLine] += this._editBuffer.splice(this._cursorLine + 1, 1)[0]!;
+      }
+      this.invalidate();
+      return true;
+    }
+
+    // Enter
+    if (matchesKey(data, Key.enter)) {
+      const line = this._editBuffer[this._cursorLine]!;
+      const before = line.slice(0, this._cursorCol);
+      const after = line.slice(this._cursorCol);
+      this._editBuffer[this._cursorLine] = before;
+      this._editBuffer.splice(this._cursorLine + 1, 0, after);
+      this._cursorLine++;
+      this._cursorCol = 0;
+      this.invalidate();
+      return true;
+    }
+
+    // Printable characters (including Kitty protocol)
+    const ch = decodeKittyPrintable(data) ?? (data.length === 1 && data >= ' ' ? data : null);
+    if (ch) {
+      const line = this._editBuffer[this._cursorLine]!;
+      this._editBuffer[this._cursorLine] = line.slice(0, this._cursorCol) + ch + line.slice(this._cursorCol);
+      this._cursorCol++;
+      this.invalidate();
+      return true;
+    }
+
+    return false;
+  }
+
+  private moveCursor(dLine: number, dCol: number): void {
+    const wasAtEnd = this._cursorCol >= this._editBuffer[this._cursorLine]!.length;
+    this._cursorLine = Math.max(0, Math.min(this._editBuffer.length - 1, this._cursorLine + dLine));
+    if (dLine !== 0 && wasAtEnd) {
+      // Sticky end: if cursor was at end of line, move to end of target line
+      this._cursorCol = this._editBuffer[this._cursorLine]!.length;
+    } else {
+      this._cursorCol = Math.max(0, Math.min(this._editBuffer[this._cursorLine]!.length, this._cursorCol + dCol));
+    }
+    this.invalidate();
+  }
+
+  private renderLineWithCursor(line: string, _maxWidth: number): string {
+    const col = Math.min(this._cursorCol, line.length);
+    const before = line.slice(0, col);
+    const cursorChar = col < line.length ? line[col]! : ' ';
+    const after = col < line.length ? line.slice(col + 1) : '';
+
+    const highlightedBefore = highlightLine(before);
+    const cursorStyled = chalk.inverse(cursorChar);
+    const highlightedAfter = highlightLine(after);
+
+    return highlightedBefore + cursorStyled + highlightedAfter;
   }
 
   invalidate(): void {
