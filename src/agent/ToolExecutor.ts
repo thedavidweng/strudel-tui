@@ -78,19 +78,25 @@ export class ToolExecutor {
           }
           this.setPattern(args.code);
           if (this._audio) {
-            try { await this._audio.play(args.code); } catch {}
+            try { await this._audio.play(args.code); } catch (err: unknown) {
+              console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
+            }
           }
           return `Pattern set. Ready to play: ${args.code}`;
         }
         if (this._audio && this._pattern.trim()) {
-          try { await this._audio.play(this._pattern); } catch {}
+          try { await this._audio.play(this._pattern); } catch (err: unknown) {
+            console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
+          }
         }
         return `Playing current pattern: ${this._pattern}`;
       }
 
       case 'stop_playback':
         if (this._audio) {
-          try { await this._audio.stop(); } catch {}
+          try { await this._audio.stop(); } catch (err: unknown) {
+            console.warn('[ToolExecutor] audio.stop failed:', err instanceof Error ? err.message : err);
+          }
         }
         return 'Playback stopped.';
 
@@ -162,8 +168,8 @@ export class ToolExecutor {
           const code = await this._loader.loadPattern(filePath);
           this.setPattern(code);
           return `Loaded "${args.name}": ${code}`;
-        } catch (err: any) {
-          return `Could not load pattern "${args.name}": ${err.message}`;
+        } catch (err: unknown) {
+          return `Could not load pattern "${args.name}": ${err instanceof Error ? err.message : String(err)}`;
         }
       }
 
@@ -174,8 +180,8 @@ export class ToolExecutor {
           const filePath = `${dir}/${args.name}.strudel`;
           await this._loader.savePattern(filePath, this._pattern);
           return `Pattern saved as "${args.name}".`;
-        } catch (err: any) {
-          return `Could not save pattern: ${err.message}`;
+        } catch (err: unknown) {
+          return `Could not save pattern: ${err instanceof Error ? err.message : String(err)}`;
         }
       }
 

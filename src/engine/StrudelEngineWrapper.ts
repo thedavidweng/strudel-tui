@@ -40,14 +40,6 @@ export interface PatternInfo {
   totalSpan: number;
 }
 
-export interface FormattedError {
-  title: string;
-  message: string;
-  line?: number;
-  column?: number;
-  excerpt?: string;
-}
-
 // ---------------------------------------------------------------------------
 // Preset patterns for generatePattern()
 // ---------------------------------------------------------------------------
@@ -141,21 +133,20 @@ export class StrudelEngineWrapper {
     try {
       transpiler(code);
       return { valid: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errors: ValidationError[] = [];
 
-      if (err instanceof SyntaxError || err?.name === 'SyntaxError') {
+      if (err instanceof Error) {
         // Acorn attaches `.loc` (line/column) and `.pos` (character offset)
-        const line = err.loc?.line;
-        const column = err.loc?.column;
+        const loc = (err as { loc?: { line?: number; column?: number } }).loc;
         errors.push({
           message: err.message,
-          line,
-          column,
+          line: loc?.line,
+          column: loc?.column,
         });
       } else {
         errors.push({
-          message: err?.message ?? String(err),
+          message: String(err),
         });
       }
 
@@ -207,9 +198,9 @@ export class StrudelEngineWrapper {
             value,
           };
         });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Return empty array -- caller can use formatError() if needed
-      console.warn('[StrudelEngineWrapper] queryEvents error:', err?.message);
+      console.warn('[StrudelEngineWrapper] queryEvents error:', err instanceof Error ? err.message : err);
       return [];
     }
   }
@@ -248,10 +239,6 @@ export class StrudelEngineWrapper {
     ];
     const scale = scales[hash % scales.length];
 
-    // Root note (2 octaves range)
-    const roots = ['c', 'd', 'e', 'f', 'g', 'a'];
-    const _root = roots[(hash >> 8) % roots.length];
-
     // Generate 4-8 note events
     const noteCount = 4 + ((hash >> 4) & 0x03); // 4-7
     const noteNames = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
@@ -277,34 +264,7 @@ export class StrudelEngineWrapper {
   }
 
   // -----------------------------------------------------------------------
-  // 4. formatError
-  // -----------------------------------------------------------------------
-
-  /**
-   * Format an error (typically caught during evaluate / transpile) into a
-   * structured object suitable for TUI display.
-   */
-  formatError(err: any): FormattedError {
-    if (!err) {
-      return { title: 'Unknown error', message: 'An unknown error occurred.' };
-    }
-
-    const title = err.name || 'Error';
-    const message = err.message || String(err);
-    const line = err.loc?.line;
-    const column = err.loc?.column;
-
-    let excerpt: string | undefined;
-    if (err.loc?.line != null) {
-      // Attempt to build a caret excerpt from source context if available
-      excerpt = `line ${err.loc.line}, column ${err.loc.column}`;
-    }
-
-    return { title, message, line, column, excerpt };
-  }
-
-  // -----------------------------------------------------------------------
-  // 5. getPatternInfo
+  // 4. getPatternInfo
   // -----------------------------------------------------------------------
 
   /**
@@ -348,8 +308,8 @@ export class StrudelEngineWrapper {
         cycleDuration: 1, // At 1 cps, one cycle = 1 second
         totalSpan: 1,
       };
-    } catch (err: any) {
-      console.warn('[StrudelEngineWrapper] getPatternInfo error:', err?.message);
+    } catch (err: unknown) {
+      console.warn('[StrudelEngineWrapper] getPatternInfo error:', err instanceof Error ? err.message : err);
       return null;
     }
   }

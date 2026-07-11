@@ -48,7 +48,7 @@ import { PatternPanel } from './PatternPanel.js';
 import { SLASH_COMMANDS } from './SlashCommandMenu.js';
 import { SlashCommandMenu } from './SlashCommandMenu.js';
 import { StatusBar } from './StatusBar.js';
-import { Welcome } from './Welcome.js';
+import type { MessageType } from './MessageHistory.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,11 +61,6 @@ export interface StrudelTUIOptions {
   configOverrides?: Partial<StrudelConfig>;
 }
 
-interface QueuedMessage {
-  text: string;
-  isCommand: boolean;
-}
-
 type ConfigPanelMode = 'config' | 'provider' | null;
 
 // ---------------------------------------------------------------------------
@@ -74,7 +69,9 @@ type ConfigPanelMode = 'config' | 'provider' | null;
 
 const CHROME_GUTTER = 1;
 const DEFAULT_PATTERN = `// Start typing your Strudel pattern here\nd1 $ s "bd sn"`;
-const VERSION = '0.1.0';
+
+/** Slash commands that require an argument before executing. */
+const COMMANDS_WITH_ARGS = ['/make', '/edit', '/load'];
 
 // ---------------------------------------------------------------------------
 // StrudelTUI
@@ -116,15 +113,13 @@ export class StrudelTUI {
   private readonly inputHistory: string[] = [];
   private historyIndex = -1;
   private exitArmed = 0;
-  private readonly queuedMessages: QueuedMessage[] = [];
-  private readonly options: StrudelTUIOptions;
+  private readonly queuedMessages: string[] = [];
 
   // ---------------------------------------------------------------------------
   // Constructor
   // ---------------------------------------------------------------------------
 
   constructor(options: StrudelTUIOptions) {
-    this.options = options;
     this.pattern = options.initialPattern ?? DEFAULT_PATTERN;
     this.bpm = options.bpm;
     this.debug = options.debug;
@@ -163,7 +158,6 @@ export class StrudelTUI {
     // Input field
     this.inputField = new Input();
     this.inputField.onSubmit = (value: string) => this.handleSubmit(value);
-    this.inputField.onEscape = () => this.handleEscape();
 
     // ── Build containers with Kimi Code gutter pattern ──
 
@@ -235,7 +229,6 @@ export class StrudelTUI {
 
   private renderWelcome(): void {
     const isConfigured = this.agent.hasLLM;
-    const model = isConfigured ? this.configManager.get('model') : undefined;
 
     // Add welcome info as system messages (matching Kimi Code style)
     if (isConfigured) {
@@ -332,7 +325,7 @@ export class StrudelTUI {
       this.slashMenu.confirm();
       const selected = this.slashMenu.getSelected();
       if (selected) {
-        const needsArg = ['/make', '/edit', '/load'].includes(selected.name);
+        const needsArg = COMMANDS_WITH_ARGS.includes(selected.name);
         this.inputField.setValue(needsArg ? selected.name + ' ' : selected.name);
         this.slashMenu.setFilter('');
       }
@@ -424,7 +417,7 @@ export class StrudelTUI {
   // ---------------------------------------------------------------------------
 
   executeCommand(cmdName: string): void {
-    const needsArg = ['/make', '/edit', '/load'].includes(cmdName);
+    const needsArg = COMMANDS_WITH_ARGS.includes(cmdName);
     if (needsArg) {
       this.inputField.setValue(cmdName + ' ');
       this.tui.requestRender();
@@ -491,7 +484,7 @@ export class StrudelTUI {
 
   private processUserMessage(msg: string): void {
     if (this.streaming) {
-      this.queuedMessages.push({ text: msg, isCommand: false });
+      this.queuedMessages.push(msg);
       this.addMessage('system', 'Message queued (agent is busy)');
       this.tui.requestRender();
       return;
@@ -520,8 +513,8 @@ export class StrudelTUI {
         await this.agent.processUserMessageStreaming(message, (event: AgentEvent) =>
           this.handleAgentEvent(event),
         );
-      } catch (err: any) {
-        this.addMessage('error', err.message);
+      } catch (err: unknown) {
+        this.addMessage('error', (err instanceof Error ? err.message : String(err)));
       } finally {
         this.streaming = false;
         this.statusBar.update({ streaming: false });
@@ -545,8 +538,8 @@ export class StrudelTUI {
         }
         if (response.action === 'play') void this.handlePlay();
         else if (response.action === 'stop') void this.handleStop();
-      } catch (err: any) {
-        this.addMessage('error', err.message);
+      } catch (err: unknown) {
+        this.addMessage('error', (err instanceof Error ? err.message : String(err)));
       } finally {
         this.tui.requestRender();
         this.flushQueue();
@@ -612,11 +605,7 @@ export class StrudelTUI {
   private flushQueue(): void {
     if (this.queuedMessages.length === 0) return;
     const next = this.queuedMessages.shift()!;
-    if (next.isCommand) {
-      this.executeCommand(next.text);
-    } else {
-      this.processUserMessage(next.text);
-    }
+    this.processUserMessage(next);
   }
 
   // ---------------------------------------------------------------------------
@@ -632,8 +621,8 @@ export class StrudelTUI {
       this.patternPanel.setPlaying(true);
       this.tui.requestRender();
       this.addMessage('system', 'Playing');
-    } catch (err: any) {
-      this.addMessage('error', `Playback error: ${err.message}`);
+    } catch (err: unknown) {
+      this.addMessage('error', `Playback error: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }
 
@@ -644,8 +633,8 @@ export class StrudelTUI {
       this.statusBar.update({ playing: false });
       this.patternPanel.setPlaying(false);
       this.tui.requestRender();
-    } catch (err: any) {
-      this.addMessage('error', `Stop error: ${err.message}`);
+    } catch (err: unknown) {
+      this.addMessage('error', `Stop error: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }
 
@@ -662,8 +651,8 @@ export class StrudelTUI {
     try {
       await writeFile(filename, this.pattern, 'utf-8');
       this.addMessage('system', `Saved to ${filename}`);
-    } catch (err: any) {
-      this.addMessage('error', `Save error: ${err.message}`);
+    } catch (err: unknown) {
+      this.addMessage('error', `Save error: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }
 
@@ -701,14 +690,6 @@ export class StrudelTUI {
   }
 
   // ---------------------------------------------------------------------------
-  // Escape Handler
-  // ---------------------------------------------------------------------------
-
-  private handleEscape(): void {
-    // Handled in handleGlobalInput
-  }
-
-  // ---------------------------------------------------------------------------
   // Slash Menu Updates
   // ---------------------------------------------------------------------------
 
@@ -720,8 +701,8 @@ export class StrudelTUI {
   // Message Helper
   // ---------------------------------------------------------------------------
 
-  private addMessage(type: string, content: string): void {
-    this.messageHistory.addMessage({ type: type as any, content });
+  private addMessage(type: MessageType, content: string): void {
+    this.messageHistory.addMessage({ type, content });
     this.tui.requestRender();
   }
 

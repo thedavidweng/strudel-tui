@@ -229,8 +229,12 @@ export class OpenAIClient {
               yield { type: 'done', finish_reason: chunk.choices[0].finish_reason };
               return;
             }
-          } catch {
-            // Skip malformed JSON chunks
+          } catch (err: unknown) {
+            // Skip malformed JSON chunks — the SSE stream may contain
+            // partial data or keep-alive comments that aren't valid JSON.
+            if (data !== '[DONE]') {
+              console.warn('[OpenAIClient] skipping malformed SSE chunk:', err instanceof Error ? err.message : err);
+            }
           }
         }
       }

@@ -16,7 +16,7 @@ import chalk from 'chalk';
 import { Component, matchesKey, CURSOR_MARKER } from '@earendil-works/pi-tui';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { fetchModels, type ModelInfo } from '../llm/OpenAIClient.js';
-import { colors } from './theme.js';
+import { colors, BRAILLE_DOTS } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // Provider presets
@@ -45,12 +45,6 @@ const PROVIDERS: ProviderPreset[] = [
 
 type ConfigStep = 'provider' | 'api-key' | 'base-url' | 'fetching-models' | 'select-model' | 'confirm';
 type Mode = 'config' | 'provider';
-
-// ---------------------------------------------------------------------------
-// Braille spinner frames
-// ---------------------------------------------------------------------------
-
-const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 // ---------------------------------------------------------------------------
 // ANSI strip helper (for visible-width calculation)
@@ -370,8 +364,9 @@ export class InlineConfig implements Component {
         this._cursorPos = this._model.length;
         this.invalidate();
       })
-      .catch((err: Error) => {
-        this._fetchError = `Could not fetch models: ${err.message}. You can enter the model name manually.`;
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        this._fetchError = `Could not fetch models: ${msg}. You can enter the model name manually.`;
         this._models = [];
         this._step = 'select-model';
         this._cursorPos = this._model.length;

@@ -1,7 +1,8 @@
 import { defineCommand, runMain } from 'citty';
 import { readFile } from 'node:fs/promises';
-import { Container, ProcessTerminal, TUI } from '@earendil-works/pi-tui';
+import { type Component, Container, ProcessTerminal, TUI } from '@earendil-works/pi-tui';
 import { ConfigManager } from './config/ConfigManager.js';
+import type { StrudelConfig } from './config/ConfigManager.js';
 import { InlineConfig } from './tui/InlineConfig.js';
 import { StrudelTUI } from './tui/StrudelTUI.js';
 
@@ -29,17 +30,18 @@ const configCmd = defineCommand({
         },
       },
       run({ args }) {
-        const validKeys = ['apiKey', 'baseUrl', 'model', 'temperature', 'maxTokens'];
-        if (!validKeys.includes(args.key)) {
+        const validKeys: (keyof StrudelConfig)[] = ['apiKey', 'baseUrl', 'model', 'temperature', 'maxTokens'];
+        if (!validKeys.includes(args.key as keyof StrudelConfig)) {
           console.error(`Invalid key "${args.key}". Valid keys: ${validKeys.join(', ')}`);
           process.exit(1);
         }
         const config = new ConfigManager();
-        const value = args.key === 'temperature' || args.key === 'maxTokens'
+        const key = args.key as keyof StrudelConfig;
+        const value = key === 'temperature' || key === 'maxTokens'
           ? Number(args.value)
           : args.value;
-        config.set(args.key as any, value);
-        console.log(`Set ${args.key} = ${args.key === 'apiKey' ? '***' : value}`);
+        config.set(key, value);
+        console.log(`Set ${key} = ${key === 'apiKey' ? '***' : value}`);
       },
     }),
     show: defineCommand({
@@ -79,8 +81,8 @@ const configCmd = defineCommand({
           }
         });
 
-        configContainer.addChild(inlineConfig as any);
-        tui.setFocus(inlineConfig as any);
+        configContainer.addChild(inlineConfig as unknown as Component);
+        tui.setFocus(inlineConfig as unknown as Component);
         tui.start();
 
         const cleanup = () => {
@@ -145,8 +147,9 @@ const main = defineCommand({
     if (args.pattern) {
       try {
         initialPattern = await readFile(args.pattern, 'utf-8');
-      } catch (err: any) {
-        console.error(`Failed to read pattern file "${args.pattern}": ${err.message}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Failed to read pattern file "${args.pattern}": ${msg}`);
         process.exit(1);
       }
     }
@@ -158,7 +161,7 @@ const main = defineCommand({
     }
 
     // Build config overrides from CLI flags
-    const configOverrides: Record<string, any> = {};
+    const configOverrides: Partial<StrudelConfig> = {};
     if (args['api-key']) configOverrides.apiKey = args['api-key'];
     if (args['base-url']) configOverrides.baseUrl = args['base-url'];
     if (args.model) configOverrides.model = args.model;

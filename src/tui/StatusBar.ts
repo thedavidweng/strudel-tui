@@ -8,13 +8,11 @@
 
 import chalk from 'chalk';
 import { Component, visibleWidth, truncateToWidth } from '@earendil-works/pi-tui';
-import { colors } from './theme.js';
+import { colors, BRAILLE_DOTS } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // Braille spinner (text-based, no React hooks)
 // ---------------------------------------------------------------------------
-
-const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /** Returns the current braille frame character for a given tick. */
 function brailleFrame(tick: number): string {

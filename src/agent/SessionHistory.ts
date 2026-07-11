@@ -191,8 +191,8 @@ export class SessionHistory {
 
       const filePath = join(this._sessionDir, `${this._sessionId}.json`);
       await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (err: any) {
-      console.warn('[SessionHistory] Failed to save session:', err.message);
+    } catch (err: unknown) {
+      console.warn('[SessionHistory] Failed to save session:', err instanceof Error ? err.message : err);
     }
   }
 

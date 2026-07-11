@@ -6,7 +6,7 @@
  * right padding (logical — right padding is implicit via reduced width).
  */
 
-import { type Component, Container } from '@earendil-works/pi-tui';
+import { Container } from '@earendil-works/pi-tui';
 
 export class GutterContainer extends Container {
   private readonly leftPad: number;

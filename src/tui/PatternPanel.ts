@@ -10,9 +10,7 @@
 
 import chalk from 'chalk';
 import { Component, visibleWidth, truncateToWidth, decodeKittyPrintable, Key, matchesKey } from '@earendil-works/pi-tui';
-import { colors } from './theme.js';
-
-const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+import { colors, BRAILLE_DOTS } from './theme.js';
 
 // Syntax highlighting
 const KNOWN_FUNCTIONS = new Set([
