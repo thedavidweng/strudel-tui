@@ -89,7 +89,7 @@ export class KeywordAdapter {
             break;
           }
           const result = await this._executor.executeTool('validate_pattern', { code: this._executor.currentPattern });
-          if (result.startsWith('Invalid')) {
+          if (!result.startsWith('Valid')) {
             response = { action: 'validate', message: result, error: result, pattern: this._executor.currentPattern };
           } else {
             response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
