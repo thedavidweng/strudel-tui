@@ -54,6 +54,23 @@ describe('ConfigManager', () => {
     // apiKey should not be set to undefined — it should fall through to file or default
     expect(cm.get('apiKey')).not.toBe(undefined);
   });
+
+  test('set updates a key and getAll returns it', () => {
+    const cm = new ConfigManager({ apiKey: 'test-key' });
+    cm.set('model', 'gpt-4o-mini');
+    expect(cm.get('model')).toBe('gpt-4o-mini');
+    const all = cm.getAll();
+    expect(all.model).toBe('gpt-4o-mini');
+    expect(all.apiKey).toBe('test-key');
+  });
+
+  test('set preserves other keys (immutable update)', () => {
+    const cm = new ConfigManager({ apiKey: 'key1', baseUrl: 'https://example.com', model: 'm1' });
+    cm.set('model', 'm2');
+    expect(cm.get('apiKey')).toBe('key1');
+    expect(cm.get('baseUrl')).toBe('https://example.com');
+    expect(cm.get('model')).toBe('m2');
+  });
 });
 
 describe('StrudelConfig interface', () => {
