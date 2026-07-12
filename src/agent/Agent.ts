@@ -1,5 +1,4 @@
 import { SessionHistory } from './SessionHistory.js';
-import { DiffGenerator } from './DiffGenerator.js';
 import { ToolExecutor } from './ToolExecutor.js';
 import { KeywordAdapter } from './KeywordAdapter.js';
 import { LLMAdapter } from './LLMAdapter.js';
@@ -41,14 +40,12 @@ export class Agent {
   context: AgentContext;
   private _executor: ToolExecutor;
   private _history: SessionHistory;
-  private _diffGen: DiffGenerator;
   private _keyword: KeywordAdapter;
   private _llm: LLMAdapter | null;
 
   constructor(initialPattern = '', sessionId?: string, configOverrides?: Partial<StrudelConfig>, audio?: AudioControl) {
     this.context = { pattern: initialPattern, history: [] };
     this._history = new SessionHistory(sessionId);
-    this._diffGen = new DiffGenerator();
 
     if (initialPattern) {
       this._history.pushPattern(initialPattern);
@@ -144,15 +141,6 @@ export class Agent {
     const restored = this._executor.redoPattern();
     this._syncPatternFromExecutor();
     return restored;
-  }
-
-  // -------------------------------------------------------------------------
-  // Generate diff (public, backward compat)
-  // -------------------------------------------------------------------------
-
-  async generateDiff(newPattern: string): Promise<{ diff: string; patched: string }> {
-    const unified = this._diffGen.computeDiff(this.context.pattern, newPattern);
-    return { diff: unified.text, patched: newPattern };
   }
 
   // -------------------------------------------------------------------------

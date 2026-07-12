@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { DiffGenerator, type UnifiedDiff } from '../src/agent/DiffGenerator';
+import { DiffGenerator } from '../src/agent/DiffGenerator';
 
 describe('DiffGenerator', () => {
   const gen = new DiffGenerator();

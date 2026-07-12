@@ -79,12 +79,7 @@ export class KeywordAdapter {
             break;
           }
           const result = await this._executor.executeTool('edit_pattern', { instruction: intent.instruction });
-          const edited = this._executor.currentPattern;
-          if (result.startsWith('Could not')) {
-            response = { action: 'edit', message: result, pattern: edited };
-          } else {
-            response = { action: 'edit', message: result, pattern: edited };
-          }
+          response = { action: 'edit', message: result, pattern: this._executor.currentPattern };
           break;
         }
 
@@ -94,10 +89,10 @@ export class KeywordAdapter {
             break;
           }
           const result = await this._executor.executeTool('validate_pattern', { code: this._executor.currentPattern });
-          if (result.startsWith('Valid')) {
-            response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
-          } else {
+          if (!result.startsWith('Valid')) {
             response = { action: 'validate', message: result, error: result, pattern: this._executor.currentPattern };
+          } else {
+            response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
           }
           break;
         }
@@ -139,22 +134,11 @@ export class KeywordAdapter {
         default:
           response = { action: 'unknown', message: 'Could not understand input.', error: 'Unknown intent' };
       }
-    } catch (err: any) {
-      response = { action: 'error', message: `Error: ${err.message}`, error: err.message };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      response = { action: 'error', message: `Error: ${msg}`, error: msg };
     }
 
     return response;
-  }
-
-  // Undo/redo require access to SessionHistory. ToolExecutor owns the history
-  // and manages pattern stack. We expose undo/redo through the executor.
-  private _undoPattern(): string | undefined {
-    // Access the history through executor's pattern stack
-    // This is a temporary bridge — in Slice 6 we'll wire this properly
-    return (this._executor as any)._history?.undoPattern();
-  }
-
-  private _redoPattern(): string | undefined {
-    return (this._executor as any)._history?.redoPattern();
   }
 }

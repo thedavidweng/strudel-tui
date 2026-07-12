@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { getPalette, colors, createMarkdownTheme, createEditorTheme, type ColorPalette } from '../src/tui/theme';
+import { getPalette, colors, createMarkdownTheme, createEditorTheme } from '../src/tui/theme';
 
 describe('getPalette', () => {
   test('returns dark palette by default', () => {
@@ -48,7 +48,7 @@ describe('colors (default export)', () => {
 
   test('all color values are valid hex', () => {
     const hexRe = /^#[0-9A-Fa-f]{6}$/;
-    for (const [key, value] of Object.entries(colors)) {
+    for (const [, value] of Object.entries(colors)) {
       expect(value).toMatch(hexRe);
     }
   });
@@ -70,7 +70,7 @@ describe('createMarkdownTheme', () => {
 
   test('each adapter returns a string', () => {
     const theme = createMarkdownTheme(colors);
-    for (const [key, fn] of Object.entries(theme)) {
+    for (const [, fn] of Object.entries(theme)) {
       const result = (fn as (s: string) => string)('test');
       expect(typeof result).toBe('string');
       expect(result.length).toBeGreaterThan(0);

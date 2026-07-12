@@ -136,9 +136,9 @@ export class AudioController {
       try {
         await this._startWebView();
         return;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn(
-          `[AudioController] WebView initialisation failed (${err.message}), falling back to console mode.`,
+          `[AudioController] WebView initialisation failed (${err instanceof Error ? err.message : err}), falling back to console mode.`,
         );
       }
     }
@@ -255,13 +255,13 @@ export class AudioController {
       }
 
       this._isPlaying = true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // If the WebView has crashed or been closed, reset state so a
       // subsequent call will re-create it.
       if (this._isWebViewGone(err)) {
         this._resetToError('WebView crashed or was closed');
       }
-      throw new Error(`Pattern evaluation failed: ${err.message}`);
+      throw new Error(`Pattern evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -288,11 +288,11 @@ export class AudioController {
         console.warn('[AudioController] stopPlayback returned error:', result.error);
       }
       this._isPlaying = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (this._isWebViewGone(err)) {
         this._resetToError('WebView crashed or was closed');
       } else {
-        console.warn('[AudioController] Error stopping playback:', err.message);
+        console.warn('[AudioController] Error stopping playback:', err instanceof Error ? err.message : err);
       }
       this._isPlaying = false;
     }
@@ -343,8 +343,8 @@ export class AudioController {
    * Heuristic: did the WebView die?  Bun throws when evaluate() is
    * called on a closed or crashed view.
    */
-  private _isWebViewGone(err: any): boolean {
-    const msg = String(err?.message || err).toLowerCase();
+  private _isWebViewGone(err: unknown): boolean {
+    const msg = String(err instanceof Error ? err.message : err).toLowerCase();
     return (
       msg.includes('closed') ||
       msg.includes('destroyed') ||

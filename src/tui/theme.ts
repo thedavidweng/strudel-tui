@@ -122,6 +122,13 @@ export function getPalette(theme: Theme = 'dark'): ColorPalette {
 export const colors: ColorPalette = dark;
 
 // ---------------------------------------------------------------------------
+// Shared UI constants
+// ---------------------------------------------------------------------------
+
+/** Braille spinner frames for loading/streaming indicators. */
+export const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+// ---------------------------------------------------------------------------
 // pi-tui MarkdownTheme adapter
 // ---------------------------------------------------------------------------
 

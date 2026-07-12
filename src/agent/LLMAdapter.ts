@@ -75,7 +75,9 @@ export class LLMAdapter {
             let args: Record<string, any> = {};
             try {
               args = JSON.parse(tc.arguments);
-            } catch {}
+            } catch (err: unknown) {
+              console.warn('[LLMAdapter] malformed tool arguments for', tc.name, ':', err instanceof Error ? err.message : err);
+            }
 
             onEvent({ type: 'tool_call', name: tc.name, args });
 
@@ -111,7 +113,9 @@ export class LLMAdapter {
       if (pendingToolCalls.size > 0) {
         for (const [id, tc] of pendingToolCalls) {
           let args: Record<string, any> = {};
-          try { args = JSON.parse(tc.arguments); } catch {}
+          try { args = JSON.parse(tc.arguments); } catch (err: unknown) {
+            console.warn('[LLMAdapter] malformed tool arguments for', tc.name, ':', err instanceof Error ? err.message : err);
+          }
           onEvent({ type: 'tool_call', name: tc.name, args });
           const result = await this._executor.executeTool(tc.name, args);
           onEvent({ type: 'tool_result', name: tc.name, result });
@@ -144,10 +148,11 @@ export class LLMAdapter {
         pattern: this._executor.currentPattern,
       };
       onEvent({ type: 'done', response });
-    } catch (err: any) {
-      const errorMsg = `LLM error: ${err.message}`;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const errorMsg = `LLM error: ${msg}`;
       onEvent({ type: 'error', error: errorMsg });
-      onEvent({ type: 'done', response: { action: 'error', message: errorMsg, error: err.message } });
+      onEvent({ type: 'done', response: { action: 'error', message: errorMsg, error: msg } });
     }
   }
 }

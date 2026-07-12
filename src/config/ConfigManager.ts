@@ -40,7 +40,7 @@ export class ConfigManager {
   }
 
   set(key: keyof StrudelConfig, value: string | number): void {
-    (this.config as any)[key] = value;
+    this.config = { ...this.config, [key]: value };
     this.save();
   }
 
@@ -70,10 +70,10 @@ export class ConfigManager {
     });
   }
 
-  private _filterUndefined(obj: Record<string, any>): Record<string, any> {
-    const result: Record<string, any> = {};
+  private _filterUndefined(obj: StrudelConfig): StrudelConfig {
+    const result: StrudelConfig = {};
     for (const [k, v] of Object.entries(obj)) {
-      if (v !== undefined) result[k] = v;
+      if (v !== undefined) (result as Record<string, unknown>)[k] = v;
     }
     return result;
   }

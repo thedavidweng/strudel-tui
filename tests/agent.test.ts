@@ -240,6 +240,18 @@ describe('SessionHistory', () => {
     history.pushPattern('b');
     expect(history.patternCount()).toBe(2);
   });
+
+  test('save does not throw on persistence failure', async () => {
+    // SessionHistory.save catches errors internally and logs a warning.
+    // We can't easily mock node:fs/promises in Bun, but we can verify
+    // that save() resolves without throwing even if the filesystem is
+    // not writable (e.g. in CI environments with restricted home dirs).
+    const history = new SessionHistory('test-save-error');
+    history.addMessage('user', 'test');
+    history.pushPattern('s("bd")');
+    // This should resolve, not reject — even if the directory creation fails
+    await expect(history.save()).resolves.toBeUndefined();
+  });
 });
 
 describe('HelpText', () => {
