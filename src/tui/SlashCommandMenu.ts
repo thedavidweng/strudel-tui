@@ -253,5 +253,3 @@ export class SlashCommandMenu implements Component {
     });
   }
 }
-
-export default SlashCommandMenu;

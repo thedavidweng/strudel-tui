@@ -188,5 +188,3 @@ export class MessageHistory implements Component {
     return lines;
   }
 }
-
-export default MessageHistory;

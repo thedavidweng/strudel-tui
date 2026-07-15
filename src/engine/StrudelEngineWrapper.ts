@@ -5,7 +5,7 @@ import { mini, m } from '@strudel/mini';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ValidationError {
+interface ValidationError {
   message: string;
   line?: number;
   column?: number;

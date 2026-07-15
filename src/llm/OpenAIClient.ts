@@ -7,7 +7,7 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
 }
 
-export interface ToolCall {
+interface ToolCall {
   id: string;
   type: 'function';
   function: {
@@ -25,7 +25,7 @@ export interface ToolDefinition {
   };
 }
 
-export interface ChatCompletionChunk {
+interface ChatCompletionChunk {
   choices: Array<{
     delta: {
       role?: string;
@@ -42,18 +42,6 @@ export interface ChatCompletionChunk {
     };
     finish_reason: string | null;
   }>;
-}
-
-export interface ChatCompletionResponse {
-  choices: Array<{
-    message: ChatMessage;
-    finish_reason: string;
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
 }
 
 export type StreamEvent =

@@ -486,5 +486,3 @@ export class InlineConfig implements Component {
     this._invalidate?.();
   }
 }
-
-export default InlineConfig;

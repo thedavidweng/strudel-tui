@@ -351,5 +351,3 @@ export class PatternPanel implements Component {
     this._invalidate?.();
   }
 }
-
-export default PatternPanel;
