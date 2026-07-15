@@ -77,6 +77,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: knip (unused exports / dependencies)
+        run: bunx knip --no-progress
+
       - name: oxlint
         run: bunx oxlint --tsconfig tsconfig.json src/ tests/
 
