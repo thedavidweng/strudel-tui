@@ -30,5 +30,3 @@ export class GutterContainer extends Container {
     return out;
   }
 }
-
-export default GutterContainer;
