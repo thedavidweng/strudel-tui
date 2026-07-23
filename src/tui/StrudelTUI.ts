@@ -470,7 +470,6 @@ export class StrudelTUI {
     }
 
     // Agent commands (make, edit, validate)
-    this.agent.context.pattern = this.pattern;
     if (this.agent.hasLLM) {
       this.runStreaming(cmdName);
     } else {
@@ -490,7 +489,6 @@ export class StrudelTUI {
       return;
     }
 
-    this.agent.context.pattern = this.pattern;
     if (this.agent.hasLLM) {
       this.runStreaming(msg);
     } else {
@@ -679,7 +677,6 @@ export class StrudelTUI {
     this.configPanel = null;
 
     if (saved) {
-      this.agent.context.pattern = this.pattern;
       this.statusBar.update({ model: new ConfigManager().get('model') });
       this.addMessage('system', '◆ Configuration saved · AI agent reloaded');
     } else {

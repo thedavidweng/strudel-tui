@@ -1,6 +1,6 @@
 import { StrudelEngineWrapper } from '../engine/StrudelEngineWrapper.js';
 import { PatternLoader } from '../engine/PatternLoader.js';
-import { SessionHistory } from './SessionHistory.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
 
 export interface AudioControl {
   play(code: string): Promise<void>;
@@ -8,64 +8,16 @@ export interface AudioControl {
 }
 
 export class ToolExecutor {
-  private _pattern: string;
+  private _patterns: PatternOwner;
   private _engine: StrudelEngineWrapper;
   private _loader: PatternLoader;
-  private _history: SessionHistory;
   private _audio: AudioControl | null;
 
-  constructor(initialPattern: string, history: SessionHistory, audio?: AudioControl) {
-    this._pattern = initialPattern;
+  constructor(patterns: PatternOwner, audio?: AudioControl) {
+    this._patterns = patterns;
     this._engine = new StrudelEngineWrapper();
     this._loader = new PatternLoader();
-    this._history = history;
     this._audio = audio ?? null;
-  }
-
-  get currentPattern(): string {
-    return this._pattern;
-  }
-
-  setPattern(pattern: string): void {
-    this._pattern = pattern;
-    this._history.pushPattern(pattern);
-  }
-
-  applyEditHeuristic(pattern: string, instruction: string): string {
-    const lower = instruction.toLowerCase();
-    if (lower.includes('faster') || lower.includes('speed up')) {
-      if (pattern.includes('.slow(')) return pattern.replace(/\.slow\(([^)]+)\)/, (_, n) => `.fast(${n})`);
-      return pattern.trimEnd() + '.fast(2)';
-    }
-    if (lower.includes('slower') || lower.includes('slow down')) {
-      if (pattern.includes('.fast(')) return pattern.replace(/\.fast\(([^)]+)\)/, (_, n) => `.slow(${n})`);
-      return pattern.trimEnd() + '.slow(2)';
-    }
-    if (lower.includes('louder') || lower.includes('volume up')) return pattern.trimEnd() + '.gain(1.5)';
-    if (lower.includes('quieter') || lower.includes('softer')) return pattern.trimEnd() + '.gain(0.5)';
-    if (lower.includes('reverse') || lower.includes('backwards')) return pattern.trimEnd() + '.rev()';
-    if (lower.includes('reverb')) return pattern.trimEnd() + '.room(0.5)';
-    if (lower.includes('delay')) return pattern.trimEnd() + '.delay(0.5)';
-    if (lower.includes('distort')) return pattern.trimEnd() + '.distort(0.5)';
-    if (lower.includes('filter') || lower.includes('low pass')) return pattern.trimEnd() + '.lpf(800)';
-    if (lower.includes('high pass')) return pattern.trimEnd() + '.hpf(800)';
-    if (lower.includes('remove last') || lower.includes('undo last')) {
-      const match = pattern.match(/\.(\w+)\([^)]*\)\s*$/);
-      if (match) return pattern.slice(0, match.index);
-    }
-    return pattern;
-  }
-
-  undoPattern(): string | undefined {
-    const restored = this._history.undoPattern();
-    if (restored !== undefined) this._pattern = restored;
-    return restored;
-  }
-
-  redoPattern(): string | undefined {
-    const restored = this._history.redoPattern();
-    if (restored !== undefined) this._pattern = restored;
-    return restored;
   }
 
   async executeTool(name: string, args: Record<string, any>): Promise<string> {
@@ -76,7 +28,7 @@ export class ToolExecutor {
           if (!validation.valid) {
             return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
           }
-          this.setPattern(args.code);
+          this._patterns.set(args.code);
           if (this._audio) {
             try { await this._audio.play(args.code); } catch (err: unknown) {
               console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
@@ -84,12 +36,12 @@ export class ToolExecutor {
           }
           return `Pattern set. Ready to play: ${args.code}`;
         }
-        if (this._audio && this._pattern.trim()) {
-          try { await this._audio.play(this._pattern); } catch (err: unknown) {
+        if (this._audio && this._patterns.currentPattern.trim()) {
+          try { await this._audio.play(this._patterns.currentPattern); } catch (err: unknown) {
             console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
           }
         }
-        return `Playing current pattern: ${this._pattern}`;
+        return `Playing current pattern: ${this._patterns.currentPattern}`;
       }
 
       case 'stop_playback':
@@ -112,7 +64,7 @@ export class ToolExecutor {
 
       case 'generate_pattern': {
         const pattern = this._engine.generateFromSeed(args.description);
-        this.setPattern(pattern);
+        this._patterns.set(pattern);
         return `Generated: ${pattern}`;
       }
 
@@ -123,19 +75,19 @@ export class ToolExecutor {
           if (!validation.valid) {
             return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
           }
-          this.setPattern(args.code);
+          this._patterns.set(args.code);
           return `Pattern edited: ${args.code}`;
         }
         // Keyword mode: use heuristic
-        const edited = this.applyEditHeuristic(this._pattern, args.instruction ?? '');
-        if (edited === this._pattern) {
+        const edited = this._patterns.applyEdit(args.instruction ?? '');
+        if (edited === this._patterns.currentPattern) {
           return 'Could not apply that edit. Try being more specific or edit the pattern directly.';
         }
         const validation = await this._engine.validate(edited);
         if (!validation.valid) {
           return `Edit produced invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
         }
-        this.setPattern(edited);
+        this._patterns.set(edited);
         return `Pattern edited: ${edited}`;
       }
 
@@ -144,13 +96,13 @@ export class ToolExecutor {
         if (!validation.valid) {
           return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
         }
-        this.setPattern(args.code);
+        this._patterns.set(args.code);
         return `Pattern set: ${args.code}`;
       }
 
       case 'get_pattern_info': {
-        if (!this._pattern.trim()) return 'No pattern loaded.';
-        const info = await this._engine.getPatternInfo(this._pattern);
+        if (!this._patterns.currentPattern.trim()) return 'No pattern loaded.';
+        const info = await this._engine.getPatternInfo(this._patterns.currentPattern);
         if (!info) return 'Could not analyze pattern.';
         return `Pattern info: ${info.eventCount} events, ${info.voices} voice(s): ${info.voiceNames.join(', ')}`;
       }
@@ -166,7 +118,7 @@ export class ToolExecutor {
           const dir = this._loader.getDefaultPatternDir();
           const filePath = `${dir}/${args.name}.strudel`;
           const code = await this._loader.loadPattern(filePath);
-          this.setPattern(code);
+          this._patterns.set(code);
           return `Loaded "${args.name}": ${code}`;
         } catch (err: unknown) {
           return `Could not load pattern "${args.name}": ${err instanceof Error ? err.message : String(err)}`;
@@ -174,11 +126,11 @@ export class ToolExecutor {
       }
 
       case 'save_pattern': {
-        if (!this._pattern.trim()) return 'No pattern to save.';
+        if (!this._patterns.currentPattern.trim()) return 'No pattern to save.';
         try {
           const dir = this._loader.getDefaultPatternDir();
           const filePath = `${dir}/${args.name}.strudel`;
-          await this._loader.savePattern(filePath, this._pattern);
+          await this._loader.savePattern(filePath, this._patterns.currentPattern);
           return `Pattern saved as "${args.name}".`;
         } catch (err: unknown) {
           return `Could not save pattern: ${err instanceof Error ? err.message : String(err)}`;

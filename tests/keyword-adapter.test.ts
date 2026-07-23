@@ -1,17 +1,17 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { KeywordAdapter } from '../src/agent/KeywordAdapter';
 import { ToolExecutor } from '../src/agent/ToolExecutor';
-import { SessionHistory } from '../src/agent/SessionHistory';
+import { PatternOwner } from '../src/pattern/PatternOwner';
 
 describe('KeywordAdapter', () => {
   let adapter: KeywordAdapter;
   let executor: ToolExecutor;
-  let history: SessionHistory;
+  let patterns: PatternOwner;
 
   beforeEach(() => {
-    history = new SessionHistory('test-keyword');
-    executor = new ToolExecutor('', history);
-    adapter = new KeywordAdapter(executor);
+    patterns = new PatternOwner('');
+    executor = new ToolExecutor(patterns);
+    adapter = new KeywordAdapter(executor, patterns);
   });
 
   // -------------------------------------------------------------------------
@@ -101,7 +101,7 @@ describe('KeywordAdapter', () => {
 
   describe('edit routing', () => {
     test('"edit faster" on a pattern applies the edit', async () => {
-      executor.setPattern('s("bd sn")');
+      patterns.set('s("bd sn")');
       const response = await adapter.processMessage('edit faster');
       expect(response.action).toBe('edit');
       expect(response.pattern).toContain('.fast(2)');
@@ -120,16 +120,16 @@ describe('KeywordAdapter', () => {
 
   describe('undo/redo', () => {
     test('"undo" after setting a pattern reverts', async () => {
-      executor.setPattern('first');
-      executor.setPattern('second');
+      patterns.set('first');
+      patterns.set('second');
       const response = await adapter.processMessage('undo');
       expect(response.action).toBe('undo');
       expect(response.pattern).toBe('first');
     });
 
     test('"redo" after undo re-applies', async () => {
-      executor.setPattern('first');
-      executor.setPattern('second');
+      patterns.set('first');
+      patterns.set('second');
       adapter.processMessage('undo');
       const response = await adapter.processMessage('redo');
       expect(response.action).toBe('redo');

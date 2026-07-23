@@ -1,7 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { Agent } from '../src/agent/Agent';
 import { DiffGenerator } from '../src/agent/DiffGenerator';
-import { SessionHistory } from '../src/agent/SessionHistory';
 import { formatHelp, COMMANDS, KEYBOARD_SHORTCUTS, EXAMPLES } from '../src/agent/HelpText';
 
 describe('Agent', () => {
@@ -134,123 +133,6 @@ describe('DiffGenerator', () => {
     const diff = gen.computeDiff(old, updated);
     const patched = gen.applyDiff(old, diff.text);
     expect(patched).toBe(updated);
-  });
-});
-
-describe('SessionHistory', () => {
-  test('addMessage stores messages', () => {
-    const history = new SessionHistory('test-1');
-    history.addMessage('user', 'hello');
-    history.addMessage('agent', 'hi there');
-    const msgs = history.getHistory();
-    expect(msgs.length).toBe(2);
-    expect(msgs[0].role).toBe('user');
-    expect(msgs[0].content).toBe('hello');
-    expect(msgs[1].role).toBe('agent');
-    expect(msgs[1].content).toBe('hi there');
-  });
-
-  test('getRecent returns last N messages', () => {
-    const history = new SessionHistory('test-2');
-    for (let i = 0; i < 5; i++) {
-      history.addMessage('user', `msg-${i}`);
-    }
-    const recent = history.getRecent(3);
-    expect(recent.length).toBe(3);
-    expect(recent[0].content).toBe('msg-2');
-    expect(recent[2].content).toBe('msg-4');
-  });
-
-  test('clearMessages empties the history', () => {
-    const history = new SessionHistory('test-3');
-    history.addMessage('user', 'hello');
-    history.clearMessages();
-    expect(history.getHistory().length).toBe(0);
-  });
-
-  test('pushPattern and getCurrentPattern', () => {
-    const history = new SessionHistory('test-4');
-    history.pushPattern('s("bd")');
-    expect(history.getCurrentPattern()).toBe('s("bd")');
-  });
-
-  test('undoPattern returns previous pattern', () => {
-    const history = new SessionHistory('test-5');
-    history.pushPattern('first');
-    history.pushPattern('second');
-    expect(history.undoPattern()).toBe('first');
-    expect(history.getCurrentPattern()).toBe('first');
-  });
-
-  test('undoPattern returns undefined at earliest version', () => {
-    const history = new SessionHistory('test-6');
-    history.pushPattern('only');
-    expect(history.undoPattern()).toBeUndefined();
-  });
-
-  test('redoPattern re-applies after undo', () => {
-    const history = new SessionHistory('test-7');
-    history.pushPattern('first');
-    history.pushPattern('second');
-    history.undoPattern();
-    expect(history.redoPattern()).toBe('second');
-    expect(history.getCurrentPattern()).toBe('second');
-  });
-
-  test('redoPattern returns undefined at latest version', () => {
-    const history = new SessionHistory('test-8');
-    history.pushPattern('only');
-    expect(history.redoPattern()).toBeUndefined();
-  });
-
-  test('pushPattern after undo discards forward history', () => {
-    const history = new SessionHistory('test-9');
-    history.pushPattern('a');
-    history.pushPattern('b');
-    history.pushPattern('c');
-    history.undoPattern(); // back to b
-    history.pushPattern('d'); // should discard c
-    expect(history.getCurrentPattern()).toBe('d');
-    expect(history.redoPattern()).toBeUndefined();
-  });
-
-  test('canUndo and canRedo reflect state', () => {
-    const history = new SessionHistory('test-10');
-    expect(history.canUndo()).toBe(false);
-    expect(history.canRedo()).toBe(false);
-
-    history.pushPattern('a');
-    expect(history.canUndo()).toBe(false);
-    expect(history.canRedo()).toBe(false);
-
-    history.pushPattern('b');
-    expect(history.canUndo()).toBe(true);
-    expect(history.canRedo()).toBe(false);
-
-    history.undoPattern();
-    expect(history.canUndo()).toBe(false);
-    expect(history.canRedo()).toBe(true);
-  });
-
-  test('patternCount tracks stack size', () => {
-    const history = new SessionHistory('test-11');
-    expect(history.patternCount()).toBe(0);
-    history.pushPattern('a');
-    expect(history.patternCount()).toBe(1);
-    history.pushPattern('b');
-    expect(history.patternCount()).toBe(2);
-  });
-
-  test('save does not throw on persistence failure', async () => {
-    // SessionHistory.save catches errors internally and logs a warning.
-    // We can't easily mock node:fs/promises in Bun, but we can verify
-    // that save() resolves without throwing even if the filesystem is
-    // not writable (e.g. in CI environments with restricted home dirs).
-    const history = new SessionHistory('test-save-error');
-    history.addMessage('user', 'test');
-    history.pushPattern('s("bd")');
-    // This should resolve, not reject — even if the directory creation fails
-    await expect(history.save()).resolves.toBeUndefined();
   });
 });
 

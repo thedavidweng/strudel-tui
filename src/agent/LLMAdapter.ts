@@ -1,16 +1,19 @@
 import { OpenAIClient, type ChatMessage } from '../llm/OpenAIClient.js';
 import { STRUDEL_TOOLS, SYSTEM_PROMPT } from '../llm/tools.js';
 import { ToolExecutor } from './ToolExecutor.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
 import type { AgentEventHandler, AgentResponse } from './Agent.js';
 
 export class LLMAdapter {
   private _llm: OpenAIClient;
   private _executor: ToolExecutor;
+  private _patterns: PatternOwner;
   private _chatHistory: ChatMessage[] = [];
 
-  constructor(executor: ToolExecutor, config: StrudelConfig & { apiKey: string }) {
+  constructor(executor: ToolExecutor, patterns: PatternOwner, config: StrudelConfig & { apiKey: string }) {
     this._executor = executor;
+    this._patterns = patterns;
     this._llm = new OpenAIClient(config);
     this._chatHistory.push({ role: 'system', content: SYSTEM_PROMPT });
   }
@@ -145,7 +148,7 @@ export class LLMAdapter {
       const response: AgentResponse = {
         action: 'llm',
         message: fullText || 'Done.',
-        pattern: this._executor.currentPattern,
+        pattern: this._patterns.currentPattern,
       };
       onEvent({ type: 'done', response });
     } catch (err: unknown) {

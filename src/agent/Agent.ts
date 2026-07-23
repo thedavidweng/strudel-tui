@@ -1,9 +1,11 @@
-import { SessionHistory } from './SessionHistory.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
+import { ChatLog } from '../session/ChatLog.js';
+import { SessionStore, type SessionData } from '../session/SessionStore.js';
 import { ToolExecutor } from './ToolExecutor.js';
 import { KeywordAdapter } from './KeywordAdapter.js';
 import { LLMAdapter } from './LLMAdapter.js';
-import type { StrudelConfig } from '../config/ConfigManager.js';
 import { ConfigManager } from '../config/ConfigManager.js';
+import type { StrudelConfig } from '../config/ConfigManager.js';
 import type { AudioControl } from './ToolExecutor.js';
 
 // ---------------------------------------------------------------------------
@@ -27,37 +29,27 @@ export type AgentEvent =
 
 export type AgentEventHandler = (event: AgentEvent) => void;
 
-export interface AgentContext {
-  pattern: string;
-  history: string[];
-}
-
 // ---------------------------------------------------------------------------
 // Agent — thin orchestrator
 // ---------------------------------------------------------------------------
 
 export class Agent {
-  context: AgentContext;
+  private _patterns: PatternOwner;
+  private _chat: ChatLog;
   private _executor: ToolExecutor;
-  private _history: SessionHistory;
   private _keyword: KeywordAdapter;
   private _llm: LLMAdapter | null;
 
   constructor(initialPattern = '', sessionId?: string, configOverrides?: Partial<StrudelConfig>, audio?: AudioControl) {
-    this.context = { pattern: initialPattern, history: [] };
-    this._history = new SessionHistory(sessionId);
-
-    if (initialPattern) {
-      this._history.pushPattern(initialPattern);
-    }
-
-    this._executor = new ToolExecutor(initialPattern, this._history, audio);
-    this._keyword = new KeywordAdapter(this._executor);
+    this._patterns = new PatternOwner(initialPattern);
+    this._chat = new ChatLog(sessionId);
+    this._executor = new ToolExecutor(this._patterns, audio);
+    this._keyword = new KeywordAdapter(this._executor, this._patterns);
 
     // Initialize LLM if config is available
     const config = new ConfigManager(configOverrides);
     if (config.isConfigured()) {
-      this._llm = new LLMAdapter(this._executor, config.getAll() as StrudelConfig & { apiKey: string });
+      this._llm = new LLMAdapter(this._executor, this._patterns, config.getAll() as StrudelConfig & { apiKey: string });
     } else {
       this._llm = null;
     }
@@ -67,8 +59,14 @@ export class Agent {
     return this._llm !== null;
   }
 
-  get sessionHistory(): SessionHistory {
-    return this._history;
+  /** The current pattern (sole source of truth — read-only for callers). */
+  get currentPattern(): string {
+    return this._patterns.currentPattern;
+  }
+
+  /** Direct pattern mutation (e.g. from the inline pattern editor). */
+  setPattern(pattern: string): void {
+    this._patterns.set(pattern);
   }
 
   // -------------------------------------------------------------------------
@@ -80,23 +78,18 @@ export class Agent {
     onEvent: AgentEventHandler,
     signal?: AbortSignal,
   ): Promise<void> {
-    this._history.addMessage('user', message);
-    this.context.history.push(message);
-    this._syncPatternFromExecutor();
+    this._chat.addMessage('user', message);
 
     if (!this._llm) {
       const response = await this._keyword.processMessage(message);
-      this._syncPatternFromExecutor();
-      this._history.addMessage('agent', response.message);
-      this._history.save().catch(() => {});
+      this._chat.addMessage('agent', response.message);
+      await this._saveSession();
       onEvent({ type: 'done', response });
       return;
     }
 
     // LLM mode
-    const currentPattern = this.context.pattern;
-    await this._llm.processMessageStreaming(message, currentPattern, onEvent, signal);
-    this._syncPatternFromExecutor();
+    await this._llm.processMessageStreaming(message, this._patterns.currentPattern, onEvent, signal);
   }
 
   // -------------------------------------------------------------------------
@@ -104,9 +97,7 @@ export class Agent {
   // -------------------------------------------------------------------------
 
   async processUserMessage(message: string): Promise<AgentResponse> {
-    this._history.addMessage('user', message);
-    this.context.history.push(message);
-    this._syncPatternFromExecutor();
+    this._chat.addMessage('user', message);
 
     if (this._llm) {
       let fullText = '';
@@ -121,9 +112,8 @@ export class Agent {
     }
 
     const response = await this._keyword.processMessage(message);
-    this._syncPatternFromExecutor();
-    this._history.addMessage('agent', response.message);
-    this._history.save().catch(() => {});
+    this._chat.addMessage('agent', response.message);
+    await this._saveSession();
     return response;
   }
 
@@ -132,22 +122,27 @@ export class Agent {
   // -------------------------------------------------------------------------
 
   undo(): string | undefined {
-    const restored = this._executor.undoPattern();
-    this._syncPatternFromExecutor();
-    return restored;
+    return this._patterns.undo();
   }
 
   redo(): string | undefined {
-    const restored = this._executor.redoPattern();
-    this._syncPatternFromExecutor();
-    return restored;
+    return this._patterns.redo();
   }
 
   // -------------------------------------------------------------------------
-  // Sync pattern from executor to context (backward compat)
+  // Persistence
   // -------------------------------------------------------------------------
 
-  private _syncPatternFromExecutor(): void {
-    this.context.pattern = this._executor.currentPattern;
+  private async _saveSession(): Promise<void> {
+    const { stack, index } = this._patterns.exportStack();
+    const data: SessionData = {
+      id: this._chat.sessionId,
+      messages: this._chat.exportMessages(),
+      patternStack: stack,
+      currentIndex: index,
+      createdAt: this._chat.createdAt,
+      updatedAt: Date.now(),
+    };
+    await SessionStore.save(data).catch(() => {});
   }
 }

@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { LLMAdapter } from '../src/agent/LLMAdapter';
 import { ToolExecutor } from '../src/agent/ToolExecutor';
-import { SessionHistory } from '../src/agent/SessionHistory';
+import { PatternOwner } from '../src/pattern/PatternOwner';
 
 // ---------------------------------------------------------------------------
 // Helpers — build a ReadableStream from SSE lines
@@ -28,12 +28,12 @@ function makeResponse(stream: ReadableStream<Uint8Array>, status = 200): Respons
 
 describe('LLMAdapter', () => {
   let executor: ToolExecutor;
-  let history: SessionHistory;
+  let patterns: PatternOwner;
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    history = new SessionHistory('test-llm');
-    executor = new ToolExecutor('', history);
+    patterns = new PatternOwner('');
+    executor = new ToolExecutor(patterns);
   });
 
   afterEach(() => {
@@ -46,7 +46,7 @@ describe('LLMAdapter', () => {
 
   describe('construction', () => {
     test('can be created with a valid config', () => {
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4',
@@ -55,7 +55,7 @@ describe('LLMAdapter', () => {
     });
 
     test('hasLLM is true when constructed', () => {
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -70,7 +70,7 @@ describe('LLMAdapter', () => {
 
   describe('tool call handling', () => {
     test('executor is shared between adapter instances', () => {
-      const _adapter = new LLMAdapter(executor, {
+      const _adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -78,8 +78,8 @@ describe('LLMAdapter', () => {
 
       // The adapter uses the same executor — if the executor sets a pattern,
       // the adapter sees it
-      executor.setPattern('s("bd sn")');
-      expect(executor.currentPattern).toBe('s("bd sn")');
+      patterns.set('s("bd sn")');
+      expect(patterns.currentPattern).toBe('s("bd sn")');
     });
   });
 
@@ -89,7 +89,7 @@ describe('LLMAdapter', () => {
 
   describe('chat history', () => {
     test('adapter initializes with system prompt in history', () => {
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -101,7 +101,7 @@ describe('LLMAdapter', () => {
     });
 
     test('clearHistory resets chat history to system prompt only', () => {
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -121,7 +121,7 @@ describe('LLMAdapter', () => {
     test('emits error event when fetch throws', async () => {
       globalThis.fetch = (() => Promise.reject(new Error('Network down'))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -140,7 +140,7 @@ describe('LLMAdapter', () => {
     test('emits error event when fetch throws non-Error value', async () => {
       globalThis.fetch = (() => Promise.reject('string error')) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -164,7 +164,7 @@ describe('LLMAdapter', () => {
       ];
       globalThis.fetch = (() => Promise.resolve(makeResponse(makeSSEStream(sse)))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -191,7 +191,7 @@ describe('LLMAdapter', () => {
       ];
       globalThis.fetch = (() => Promise.resolve(makeResponse(makeSSEStream(sse)))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',

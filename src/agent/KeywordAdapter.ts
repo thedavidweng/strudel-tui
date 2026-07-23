@@ -1,4 +1,5 @@
 import { ToolExecutor } from './ToolExecutor.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
 import type { AgentResponse } from './Agent.js';
 import { formatHelp } from './HelpText.js';
 
@@ -47,9 +48,11 @@ function detectIntent(message: string): Intent {
 
 export class KeywordAdapter {
   private _executor: ToolExecutor;
+  private _patterns: PatternOwner;
 
-  constructor(executor: ToolExecutor) {
+  constructor(executor: ToolExecutor, patterns: PatternOwner) {
     this._executor = executor;
+    this._patterns = patterns;
   }
 
   async processMessage(message: string): Promise<AgentResponse> {
@@ -59,7 +62,7 @@ export class KeywordAdapter {
     try {
       switch (intent.type) {
         case 'play':
-          response = { action: 'play', message: 'Starting playback...', pattern: this._executor.currentPattern };
+          response = { action: 'play', message: 'Starting playback...', pattern: this._patterns.currentPattern };
           break;
 
         case 'stop':
@@ -69,36 +72,36 @@ export class KeywordAdapter {
 
         case 'generate': {
           const result = await this._executor.executeTool('generate_pattern', { description: intent.description });
-          response = { action: 'generate', message: result, pattern: this._executor.currentPattern };
+          response = { action: 'generate', message: result, pattern: this._patterns.currentPattern };
           break;
         }
 
         case 'edit': {
-          if (!this._executor.currentPattern.trim()) {
+          if (!this._patterns.currentPattern.trim()) {
             response = { action: 'edit', message: 'No pattern to edit.', error: 'No current pattern' };
             break;
           }
           const result = await this._executor.executeTool('edit_pattern', { instruction: intent.instruction });
-          response = { action: 'edit', message: result, pattern: this._executor.currentPattern };
+          response = { action: 'edit', message: result, pattern: this._patterns.currentPattern };
           break;
         }
 
         case 'validate': {
-          if (!this._executor.currentPattern.trim()) {
+          if (!this._patterns.currentPattern.trim()) {
             response = { action: 'validate', message: 'No pattern to validate.' };
             break;
           }
-          const result = await this._executor.executeTool('validate_pattern', { code: this._executor.currentPattern });
+          const result = await this._executor.executeTool('validate_pattern', { code: this._patterns.currentPattern });
           if (!result.startsWith('Valid')) {
-            response = { action: 'validate', message: result, error: result, pattern: this._executor.currentPattern };
+            response = { action: 'validate', message: result, error: result, pattern: this._patterns.currentPattern };
           } else {
-            response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
+            response = { action: 'validate', message: result, pattern: this._patterns.currentPattern };
           }
           break;
         }
 
         case 'undo': {
-          const restored = this._executor.undoPattern();
+          const restored = this._patterns.undo();
           if (restored === undefined) {
             response = { action: 'undo', message: 'Nothing to undo.' };
           } else {
@@ -108,7 +111,7 @@ export class KeywordAdapter {
         }
 
         case 'redo': {
-          const restored = this._executor.redoPattern();
+          const restored = this._patterns.redo();
           if (restored === undefined) {
             response = { action: 'redo', message: 'Nothing to redo.' };
           } else {
