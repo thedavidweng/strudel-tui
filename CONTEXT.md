@@ -50,5 +50,9 @@ conversation: system prompt, user/assistant/tool messages, and the
 context-suffix injection that appends the current pattern to a request.
 Distinct from ChatLog (domain messages for persistence).
 
+**SSEParser** — Server-Sent Events framing. Takes a byte stream and
+yields `data:` payloads, handling partial chunks and multi-byte splits.
+Knows nothing about OpenAI or JSON — reusable for any SSE endpoint.
+
 **KeywordAdapter** — regex-based intent detection that routes messages to
 Tools without an API key.

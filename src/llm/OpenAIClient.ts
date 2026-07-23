@@ -1,4 +1,5 @@
 import type { StrudelConfig } from '../config/ConfigManager.js';
+import { SSEParser } from './SSEParser.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -125,33 +126,75 @@ export class OpenAIClient {
       return;
     }
 
-    const reader = response.body?.getReader();
-    if (!reader) {
+    if (!response.body) {
       yield { type: 'error', error: 'No response body' };
       return;
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
+    const parser = new SSEParser(response.body);
 
     // Accumulate tool calls across chunks
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let data: string | null;
+      while ((data = await parser.next()) !== null) {
+        if (data === '[DONE]') {
+          // Emit accumulated tool calls
+          for (const [_index, tc] of toolCalls) {
+            yield {
+              type: 'tool_call_end',
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.arguments,
+            };
+          }
+          yield { type: 'done', finish_reason: 'stop' };
+          return;
+        }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        try {
+          const chunk: ChatCompletionChunk = JSON.parse(data);
+          const delta = chunk.choices?.[0]?.delta;
+          if (!delta) continue;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') {
-            // Emit accumulated tool calls
+          if (delta.content) {
+            yield { type: 'text_delta', delta: delta.content };
+          }
+
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const index = tc.index;
+              if (!toolCalls.has(index)) {
+                toolCalls.set(index, {
+                  id: tc.id || `call_${index}`,
+                  name: tc.function?.name || '',
+                  arguments: '',
+                });
+                if (tc.id && tc.function?.name) {
+                  yield {
+                    type: 'tool_call_start',
+                    id: tc.id,
+                    name: tc.function.name,
+                  };
+                }
+              }
+
+              const existing = toolCalls.get(index)!;
+              if (tc.id) existing.id = tc.id;
+              if (tc.function?.name) existing.name = tc.function.name;
+              if (tc.function?.arguments) {
+                existing.arguments += tc.function.arguments;
+                yield {
+                  type: 'tool_call_delta',
+                  id: existing.id,
+                  arguments_delta: tc.function.arguments,
+                };
+              }
+            }
+          }
+
+          if (chunk.choices[0]?.finish_reason) {
             for (const [_index, tc] of toolCalls) {
               yield {
                 type: 'tool_call_end',
@@ -160,74 +203,19 @@ export class OpenAIClient {
                 arguments: tc.arguments,
               };
             }
-            yield { type: 'done', finish_reason: 'stop' };
+            yield { type: 'done', finish_reason: chunk.choices[0].finish_reason };
             return;
           }
-
-          try {
-            const chunk: ChatCompletionChunk = JSON.parse(data);
-            const delta = chunk.choices?.[0]?.delta;
-            if (!delta) continue;
-
-            if (delta.content) {
-              yield { type: 'text_delta', delta: delta.content };
-            }
-
-            if (delta.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const index = tc.index;
-                if (!toolCalls.has(index)) {
-                  toolCalls.set(index, {
-                    id: tc.id || `call_${index}`,
-                    name: tc.function?.name || '',
-                    arguments: '',
-                  });
-                  if (tc.id && tc.function?.name) {
-                    yield {
-                      type: 'tool_call_start',
-                      id: tc.id,
-                      name: tc.function.name,
-                    };
-                  }
-                }
-
-                const existing = toolCalls.get(index)!;
-                if (tc.id) existing.id = tc.id;
-                if (tc.function?.name) existing.name = tc.function.name;
-                if (tc.function?.arguments) {
-                  existing.arguments += tc.function.arguments;
-                  yield {
-                    type: 'tool_call_delta',
-                    id: existing.id,
-                    arguments_delta: tc.function.arguments,
-                  };
-                }
-              }
-            }
-
-            if (chunk.choices[0]?.finish_reason) {
-              for (const [_index, tc] of toolCalls) {
-                yield {
-                  type: 'tool_call_end',
-                  id: tc.id,
-                  name: tc.name,
-                  arguments: tc.arguments,
-                };
-              }
-              yield { type: 'done', finish_reason: chunk.choices[0].finish_reason };
-              return;
-            }
-          } catch (err: unknown) {
-            // Skip malformed JSON chunks — the SSE stream may contain
-            // partial data or keep-alive comments that aren't valid JSON.
-            if (data !== '[DONE]') {
-              console.warn('[OpenAIClient] skipping malformed SSE chunk:', err instanceof Error ? err.message : err);
-            }
+        } catch (err: unknown) {
+          // Skip malformed JSON chunks — the SSE stream may contain
+          // partial data or keep-alive comments that aren't valid JSON.
+          if (data !== '[DONE]') {
+            console.warn('[OpenAIClient] skipping malformed SSE chunk:', err instanceof Error ? err.message : err);
           }
         }
       }
     } finally {
-      reader.releaseLock();
+      parser.release();
     }
   }
 }
