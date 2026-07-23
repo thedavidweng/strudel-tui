@@ -1,5 +1,6 @@
 import { OpenAIClient, type ChatMessage } from '../llm/OpenAIClient.js';
-import { STRUDEL_TOOLS, SYSTEM_PROMPT } from '../llm/tools.js';
+import { ChatHistory } from '../llm/ChatHistory.js';
+import { STRUDEL_TOOLS } from '../llm/tools.js';
 import { ToolExecutor } from './ToolExecutor.js';
 import { PatternOwner } from '../pattern/PatternOwner.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
@@ -9,13 +10,13 @@ export class LLMAdapter {
   private _llm: OpenAIClient;
   private _executor: ToolExecutor;
   private _patterns: PatternOwner;
-  private _chatHistory: ChatMessage[] = [];
+  private _chat: ChatHistory;
 
   constructor(executor: ToolExecutor, patterns: PatternOwner, config: StrudelConfig & { apiKey: string }) {
     this._executor = executor;
     this._patterns = patterns;
     this._llm = new OpenAIClient(config);
-    this._chatHistory.push({ role: 'system', content: SYSTEM_PROMPT });
+    this._chat = new ChatHistory();
   }
 
   get hasLLM(): boolean {
@@ -23,11 +24,11 @@ export class LLMAdapter {
   }
 
   get chatHistory(): readonly ChatMessage[] {
-    return this._chatHistory;
+    return this._chat.messages;
   }
 
   clearHistory(): void {
-    this._chatHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+    this._chat.clear();
   }
 
   async processMessageStreaming(
@@ -36,23 +37,18 @@ export class LLMAdapter {
     onEvent: AgentEventHandler,
     signal?: AbortSignal,
   ): Promise<void> {
-    this._chatHistory.push({ role: 'user', content: message });
+    this._chat.addUser(message);
 
-    // Add current pattern context
-    const contextMsg = currentPattern
+    // Add current pattern context to the request's last user message
+    const contextSuffix = currentPattern
       ? `\n\nCurrent pattern:\n\`\`\`\n${currentPattern}\n\`\`\``
       : '\n\nNo pattern loaded.';
-
-    const messages: ChatMessage[] = [
-      ...this._chatHistory.slice(0, -1),
-      { role: 'user', content: message + contextMsg },
-    ];
 
     let fullText = '';
     const pendingToolCalls: Map<string, { name: string; arguments: string }> = new Map();
 
     try {
-      const stream = this._llm.streamChat(messages, STRUDEL_TOOLS, signal);
+      const stream = this._llm.streamChat(this._chat.forRequest(contextSuffix), STRUDEL_TOOLS, signal);
 
       for await (const event of stream) {
         switch (event.type) {
@@ -75,30 +71,13 @@ export class LLMAdapter {
             const tc = pendingToolCalls.get(event.id);
             if (!tc) break;
 
-            let args: Record<string, any> = {};
-            try {
-              args = JSON.parse(tc.arguments);
-            } catch (err: unknown) {
-              console.warn('[LLMAdapter] malformed tool arguments for', tc.name, ':', err instanceof Error ? err.message : err);
-            }
-
+            const args = parseToolArgs(tc.name, tc.arguments);
             onEvent({ type: 'tool_call', name: tc.name, args });
 
             const result = await this._executor.executeTool(tc.name, args);
             onEvent({ type: 'tool_result', name: tc.name, result });
 
-            // Feed tool result back for next turn
-            this._chatHistory.push({
-              role: 'assistant',
-              content: '',
-              tool_calls: [{ id: event.id, type: 'function', function: { name: tc.name, arguments: tc.arguments } }],
-            });
-            this._chatHistory.push({
-              role: 'tool',
-              content: result,
-              tool_call_id: event.id,
-            });
-
+            this._chat.addToolCall(event.id, tc.name, tc.arguments, result);
             pendingToolCalls.delete(event.id);
             break;
           }
@@ -112,25 +91,18 @@ export class LLMAdapter {
         }
       }
 
-      // Process any remaining tool calls
+      // Process any remaining tool calls (stream ended without tool_call_end)
       if (pendingToolCalls.size > 0) {
         for (const [id, tc] of pendingToolCalls) {
-          let args: Record<string, any> = {};
-          try { args = JSON.parse(tc.arguments); } catch (err: unknown) {
-            console.warn('[LLMAdapter] malformed tool arguments for', tc.name, ':', err instanceof Error ? err.message : err);
-          }
+          const args = parseToolArgs(tc.name, tc.arguments);
           onEvent({ type: 'tool_call', name: tc.name, args });
           const result = await this._executor.executeTool(tc.name, args);
           onEvent({ type: 'tool_result', name: tc.name, result });
-          this._chatHistory.push({
-            role: 'assistant', content: '',
-            tool_calls: [{ id, type: 'function', function: { name: tc.name, arguments: tc.arguments } }],
-          });
-          this._chatHistory.push({ role: 'tool', content: result, tool_call_id: id });
+          this._chat.addToolCall(id, tc.name, tc.arguments, result);
         }
 
         // Get final response after tool execution
-        const followUp = this._llm.streamChat(this._chatHistory, STRUDEL_TOOLS, signal);
+        const followUp = this._llm.streamChat(this._chat.forRequest(''), STRUDEL_TOOLS, signal);
         let followUpText = '';
         for await (const ev of followUp) {
           if (ev.type === 'text_delta') {
@@ -139,10 +111,10 @@ export class LLMAdapter {
           }
         }
         if (followUpText) {
-          this._chatHistory.push({ role: 'assistant', content: followUpText });
+          this._chat.addAssistant(followUpText);
         }
       } else if (fullText) {
-        this._chatHistory.push({ role: 'assistant', content: fullText });
+        this._chat.addAssistant(fullText);
       }
 
       const response: AgentResponse = {
@@ -157,5 +129,14 @@ export class LLMAdapter {
       onEvent({ type: 'error', error: errorMsg });
       onEvent({ type: 'done', response: { action: 'error', message: errorMsg, error: msg } });
     }
+  }
+}
+
+function parseToolArgs(name: string, raw: string): Record<string, any> {
+  try {
+    return JSON.parse(raw);
+  } catch (err: unknown) {
+    console.warn('[LLMAdapter] malformed tool arguments for', name, ':', err instanceof Error ? err.message : err);
+    return {};
   }
 }

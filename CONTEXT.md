@@ -45,5 +45,10 @@ the PatternOwner's undo/redo stack to one JSON file per session.
 tool calls, and feeds results back. Owns the OpenAI wire-format chat
 history.
 
+**ChatHistory** — owns the OpenAI wire-format message list for one
+conversation: system prompt, user/assistant/tool messages, and the
+context-suffix injection that appends the current pattern to a request.
+Distinct from ChatLog (domain messages for persistence).
+
 **KeywordAdapter** — regex-based intent detection that routes messages to
 Tools without an API key.
