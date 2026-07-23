@@ -1,4 +1,5 @@
-import { StrudelEngineWrapper } from '../engine/StrudelEngineWrapper.js';
+import { PatternSyntax } from '../engine/PatternSyntax.js';
+import { Engine } from '../engine/Engine.js';
 import { PatternLoader } from '../engine/PatternLoader.js';
 import { PatternOwner } from '../pattern/PatternOwner.js';
 
@@ -9,13 +10,15 @@ export interface AudioControl {
 
 export class ToolExecutor {
   private _patterns: PatternOwner;
-  private _engine: StrudelEngineWrapper;
+  private _syntax: PatternSyntax;
+  private _engine: Engine;
   private _loader: PatternLoader;
   private _audio: AudioControl | null;
 
   constructor(patterns: PatternOwner, audio?: AudioControl) {
     this._patterns = patterns;
-    this._engine = new StrudelEngineWrapper();
+    this._syntax = new PatternSyntax();
+    this._engine = new Engine();
     this._loader = new PatternLoader();
     this._audio = audio ?? null;
   }
@@ -24,7 +27,7 @@ export class ToolExecutor {
     switch (name) {
       case 'play_pattern': {
         if (args.code) {
-          const validation = await this._engine.validate(args.code);
+          const validation = await this._syntax.validate(args.code);
           if (!validation.valid) {
             return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
           }
@@ -53,7 +56,7 @@ export class ToolExecutor {
         return 'Playback stopped.';
 
       case 'validate_pattern': {
-        const result = await this._engine.validate(args.code);
+        const result = await this._syntax.validate(args.code);
         if (result.valid) {
           const info = await this._engine.getPatternInfo(args.code);
           const infoStr = info ? ` (${info.eventCount} events, ${info.voices} voice${info.voices !== 1 ? 's' : ''})` : '';
@@ -63,7 +66,7 @@ export class ToolExecutor {
       }
 
       case 'generate_pattern': {
-        const pattern = this._engine.generateFromSeed(args.description);
+        const pattern = this._syntax.generateFromSeed(args.description);
         this._patterns.set(pattern);
         return `Generated: ${pattern}`;
       }
@@ -71,7 +74,7 @@ export class ToolExecutor {
       case 'edit_pattern': {
         // LLM mode: accept a code fragment directly
         if (args.code) {
-          const validation = await this._engine.validate(args.code);
+          const validation = await this._syntax.validate(args.code);
           if (!validation.valid) {
             return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
           }
@@ -83,7 +86,7 @@ export class ToolExecutor {
         if (edited === this._patterns.currentPattern) {
           return 'Could not apply that edit. Try being more specific or edit the pattern directly.';
         }
-        const validation = await this._engine.validate(edited);
+        const validation = await this._syntax.validate(edited);
         if (!validation.valid) {
           return `Edit produced invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
         }
@@ -92,7 +95,7 @@ export class ToolExecutor {
       }
 
       case 'set_pattern': {
-        const validation = await this._engine.validate(args.code);
+        const validation = await this._syntax.validate(args.code);
         if (!validation.valid) {
           return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
         }

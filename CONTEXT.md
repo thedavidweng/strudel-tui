@@ -25,8 +25,13 @@ ToolExecutor.
 **ToolExecutor** — dispatches Tool calls to the Engine, PatternOwner, and
 Audio. Holds no pattern state of its own; it mutates the PatternOwner.
 
-**Engine** — the Strudel runtime wrapper. Validates, analyses, and
-generates Pattern strings using `@strudel/*`. No audio.
+**Engine** — the Strudel runtime wrapper. Evaluates and analyses
+patterns using `@strudel/core`. Requires explicit `init()` before use
+(lazy-imports the runtime and patches globalThis). No audio.
+
+**PatternSyntax** — pure, side-effect-free pattern operations: validate,
+generate, and seed-based generation. No runtime, no init, no globals.
+Safe to call at any time.
 
 **Audio** — the playback backend. A hidden Bun.WebView runs Strudel's
 WebAudio engine; a console fallback logs patterns when WebView is

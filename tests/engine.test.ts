@@ -1,51 +1,127 @@
 import { describe, test, expect } from 'bun:test';
-import { StrudelEngineWrapper } from '../src/engine/StrudelEngineWrapper';
+import { PatternSyntax } from '../src/engine/PatternSyntax';
+import { Engine } from '../src/engine/Engine';
 
-describe('StrudelEngineWrapper', () => {
-  const engine = new StrudelEngineWrapper();
+describe('PatternSyntax', () => {
+  const syntax = new PatternSyntax();
 
   // -----------------------------------------------------------------------
   // validate()
   // -----------------------------------------------------------------------
 
   describe('validate()', () => {
-    test('accepts a valid mini-notation pattern', async () => {
-      const result = await engine.validate('s("bd sn hh cp")');
+    test('accepts a valid mini-notation pattern', () => {
+      const result = syntax.validate('s("bd sn hh cp")');
       expect(result.valid).toBe(true);
       expect(result.errors).toBeUndefined();
     });
 
-    test('accepts a valid note pattern', async () => {
-      const result = await engine.validate('note("c d e f").sound("triangle")');
+    test('accepts a valid note pattern', () => {
+      const result = syntax.validate('note("c d e f").sound("triangle")');
       expect(result.valid).toBe(true);
     });
 
-    test('accepts an empty string as valid', async () => {
-      const result = await engine.validate('');
+    test('accepts an empty string as valid', () => {
+      const result = syntax.validate('');
       expect(result.valid).toBe(true);
     });
 
-    test('rejects code with a syntax error', async () => {
-      const result = await engine.validate('s("bd sn"');
+    test('rejects code with a syntax error', () => {
+      const result = syntax.validate('s("bd sn"');
       expect(result.valid).toBe(false);
       expect(result.errors).toBeDefined();
       expect(result.errors!.length).toBeGreaterThan(0);
       expect(result.errors![0].message).toBeTruthy();
     });
 
-    test('rejects code with unbalanced braces', async () => {
-      const result = await engine.validate('{');
+    test('rejects code with unbalanced braces', () => {
+      const result = syntax.validate('{');
       expect(result.valid).toBe(false);
       expect(result.errors).toBeDefined();
       expect(result.errors!.length).toBeGreaterThan(0);
     });
 
-    test('error includes line and column when available', async () => {
-      const result = await engine.validate('const x = {\n  broken');
+    test('error includes line and column when available', () => {
+      const result = syntax.validate('const x = {\n  broken');
       expect(result.valid).toBe(false);
-      // Acorn should provide positional info for multi-line syntax errors
       const err = result.errors![0];
       expect(err.message).toBeTruthy();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // generatePattern()
+  // -----------------------------------------------------------------------
+
+  describe('generatePattern()', () => {
+    test('returns a non-empty string', () => {
+      const pattern = syntax.generatePattern();
+      expect(typeof pattern).toBe('string');
+      expect(pattern.length).toBeGreaterThan(0);
+    });
+
+    test('returns valid Strudel code', () => {
+      const pattern = syntax.generatePattern();
+      const result = syntax.validate(pattern);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // generateFromSeed()
+  // -----------------------------------------------------------------------
+
+  describe('generateFromSeed()', () => {
+    test('returns a non-empty string', () => {
+      const pattern = syntax.generateFromSeed('test seed');
+      expect(typeof pattern).toBe('string');
+      expect(pattern.length).toBeGreaterThan(0);
+    });
+
+    test('is deterministic for the same seed', () => {
+      const a = syntax.generateFromSeed('hello world');
+      const b = syntax.generateFromSeed('hello world');
+      expect(a).toBe(b);
+    });
+
+    test('produces different output for different seeds', () => {
+      const a = syntax.generateFromSeed('seed A');
+      const b = syntax.generateFromSeed('seed B');
+      expect(a).not.toBe(b);
+    });
+
+    test('generates valid Strudel code', () => {
+      const pattern = syntax.generateFromSeed('validation test');
+      const result = syntax.validate(pattern);
+      expect(result.valid).toBe(true);
+    });
+  });
+});
+
+describe('Engine', () => {
+  const engine = new Engine();
+
+  // -----------------------------------------------------------------------
+  // init()
+  // -----------------------------------------------------------------------
+
+  describe('init()', () => {
+    test('is not initialised before init() is called', () => {
+      const e = new Engine();
+      expect(e.isInitialized).toBe(false);
+    });
+
+    test('is initialised after init() is called', async () => {
+      const e = new Engine();
+      await e.init();
+      expect(e.isInitialized).toBe(true);
+    });
+
+    test('init() is idempotent', async () => {
+      const e = new Engine();
+      await e.init();
+      await e.init(); // should not throw
+      expect(e.isInitialized).toBe(true);
     });
   });
 
@@ -78,61 +154,12 @@ describe('StrudelEngineWrapper', () => {
     test('returns empty array for invalid code', async () => {
       const events = await engine.queryEvents('not_a_function("x")');
       expect(Array.isArray(events)).toBe(true);
-      // Invalid code should produce empty array (error is logged, not thrown)
     });
 
     test('respects the cycles parameter', async () => {
       const oneCycle = await engine.queryEvents('s("bd")', 1);
       const twoCycles = await engine.queryEvents('s("bd")', 2);
       expect(twoCycles.length).toBeGreaterThanOrEqual(oneCycle.length);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // generatePattern()
-  // -----------------------------------------------------------------------
-
-  describe('generatePattern()', () => {
-    test('returns a non-empty string', () => {
-      const pattern = engine.generatePattern();
-      expect(typeof pattern).toBe('string');
-      expect(pattern.length).toBeGreaterThan(0);
-    });
-
-    test('returns valid Strudel code', async () => {
-      const pattern = engine.generatePattern();
-      const result = await engine.validate(pattern);
-      expect(result.valid).toBe(true);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // generateFromSeed()
-  // -----------------------------------------------------------------------
-
-  describe('generateFromSeed()', () => {
-    test('returns a non-empty string', () => {
-      const pattern = engine.generateFromSeed('test seed');
-      expect(typeof pattern).toBe('string');
-      expect(pattern.length).toBeGreaterThan(0);
-    });
-
-    test('is deterministic for the same seed', () => {
-      const a = engine.generateFromSeed('hello world');
-      const b = engine.generateFromSeed('hello world');
-      expect(a).toBe(b);
-    });
-
-    test('produces different output for different seeds', () => {
-      const a = engine.generateFromSeed('seed A');
-      const b = engine.generateFromSeed('seed B');
-      expect(a).not.toBe(b);
-    });
-
-    test('generates valid Strudel code', async () => {
-      const pattern = engine.generateFromSeed('validation test');
-      const result = await engine.validate(pattern);
-      expect(result.valid).toBe(true);
     });
   });
 

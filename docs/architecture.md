@@ -28,27 +28,39 @@ src/
 │
 ├── llm/
 │   ├── OpenAIClient.ts          # OpenAI-compatible streaming client
+│   ├── ChatHistory.ts           # OpenAI wire-format message list
+│   ├── SSEParser.ts             # Server-Sent Events framing
 │   └── tools.ts                 # Tool definitions + system prompt
 │
 ├── agent/
 │   ├── Agent.ts                 # Main agent (LLM + keyword fallback)
+│   ├── LLMAdapter.ts            # LLM streaming + tool dispatch
+│   ├── KeywordAdapter.ts        # Regex intent detection (no API key)
+│   ├── ToolExecutor.ts          # Tool dispatch (no state)
 │   ├── DiffGenerator.ts         # Unified diff for pattern changes
-│   ├── SessionHistory.ts        # Message + pattern undo/redo history
 │   └── HelpText.ts              # Command/shortcut/example constants
 │
+├── pattern/
+│   └── PatternOwner.ts          # Single source of truth for pattern + undo/redo
+│
+├── session/
+│   ├── ChatLog.ts               # In-memory conversation messages
+│   └── SessionStore.ts          # Session persistence to disk
+│
 ├── engine/
-│   ├── StrudelEngineWrapper.ts  # Validate, query, generate patterns
+│   ├── PatternSyntax.ts         # Pure: validate, generate (no runtime)
+│   ├── Engine.ts                # Runtime: evaluate, analyse (requires init)
 │   └── PatternLoader.ts         # Load/save .strudel files
 │
 ├── audio/
 │   └── AudioController.ts       # Bun.WebView → Strudel WebAudio
 │
 └── tui/
-    ├── App.tsx                  # Main layout + state management
-    ├── ConfigWizard.tsx          # Interactive config setup
-    ├── StatusBar.tsx             # Playback state, BPM, shortcuts
+    ├── StrudelTUI.ts            # Main layout + state management
+    ├── InlineConfig.ts           # Interactive config setup
+    ├── StatusBar.ts              # Playback state, BPM, shortcuts
     ├── MessageHistory.tsx        # Chat + system messages
-    ├── PatternEditor.tsx         # Current pattern display
+    ├── PatternPanel.tsx          # Current pattern display + editor
     └── InputBox.tsx              # User input
 ```
 
@@ -99,7 +111,7 @@ In LLM mode, responses stream token-by-token into the TUI. Tool calls are displa
 
 ### Pattern Validation Before Playback
 
-All patterns pass through `StrudelEngineWrapper.validate()` before reaching the audio layer. This catches syntax errors early and provides structured error messages with line/column information.
+All patterns pass through `PatternSyntax.validate()` before reaching the audio layer. This catches syntax errors early and provides structured error messages with line/column information.
 
 ## Dependencies
 
