@@ -2,6 +2,12 @@ import { PatternSyntax } from '../engine/PatternSyntax.js';
 import { Engine } from '../engine/Engine.js';
 import { PatternLoader } from '../engine/PatternLoader.js';
 import { PatternOwner } from '../pattern/PatternOwner.js';
+import { join } from 'node:path';
+
+function sanitizePatternName(name: string): string {
+  const cleaned = String(name ?? '').replace(/[^a-zA-Z0-9_-]/g, '').trim();
+  return cleaned;
+}
 
 export interface AudioControl {
   play(code: string): Promise<void>;
@@ -72,7 +78,6 @@ export class ToolExecutor {
       }
 
       case 'edit_pattern': {
-        // LLM mode: accept a code fragment directly
         if (args.code) {
           const validation = await this._syntax.validate(args.code);
           if (!validation.valid) {
@@ -81,7 +86,6 @@ export class ToolExecutor {
           this._patterns.set(args.code);
           return `Pattern edited: ${args.code}`;
         }
-        // Keyword mode: use heuristic
         const edited = this._patterns.applyEdit(args.instruction ?? '');
         if (edited === this._patterns.currentPattern) {
           return 'Could not apply that edit. Try being more specific or edit the pattern directly.';
@@ -118,23 +122,27 @@ export class ToolExecutor {
 
       case 'load_pattern': {
         try {
+          const safeName = sanitizePatternName(args.name);
+          if (!safeName) return 'Invalid pattern name. Use only letters, numbers, hyphens, and underscores.';
           const dir = this._loader.getDefaultPatternDir();
-          const filePath = `${dir}/${args.name}.strudel`;
+          const filePath = join(dir, `${safeName}.strudel`);
           const code = await this._loader.loadPattern(filePath);
           this._patterns.set(code);
-          return `Loaded "${args.name}": ${code}`;
+          return `Loaded "${safeName}": ${code}`;
         } catch (err: unknown) {
-          return `Could not load pattern "${args.name}": ${err instanceof Error ? err.message : String(err)}`;
+          return `Could not load pattern: ${err instanceof Error ? err.message : String(err)}`;
         }
       }
 
       case 'save_pattern': {
         if (!this._patterns.currentPattern.trim()) return 'No pattern to save.';
         try {
+          const safeName = sanitizePatternName(args.name);
+          if (!safeName) return 'Invalid pattern name. Use only letters, numbers, hyphens, and underscores.';
           const dir = this._loader.getDefaultPatternDir();
-          const filePath = `${dir}/${args.name}.strudel`;
+          const filePath = join(dir, `${safeName}.strudel`);
           await this._loader.savePattern(filePath, this._patterns.currentPattern);
-          return `Pattern saved as "${args.name}".`;
+          return `Pattern saved as "${safeName}".`;
         } catch (err: unknown) {
           return `Could not save pattern: ${err instanceof Error ? err.message : String(err)}`;
         }

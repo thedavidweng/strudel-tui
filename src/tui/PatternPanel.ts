@@ -1,18 +1,7 @@
-/**
- * PatternPanel — pi-tui Component that renders the current Strudel pattern
- * in a Kimi Code-style bordered panel.
- *
- *   ┌ Pattern Editor ─────────────────────┐
- *   │  1 │ s("bd sn").lpf(800)            │
- *   │  2 │ .room(0.5)                     │
- *   └─────────────────────────────────────┘
- */
-
 import chalk from 'chalk';
 import { Component, visibleWidth, truncateToWidth, decodeKittyPrintable, Key, matchesKey } from '@earendil-works/pi-tui';
 import { colors, BRAILLE_DOTS } from './theme.js';
 
-// Syntax highlighting
 const KNOWN_FUNCTIONS = new Set([
   's', 'sound', 'note', 'freq', 'gain', 'pan', 'speed', 'crush',
   'delay', 'reverb', 'lpf', 'hpf', 'bpf', 'vowel', 'shape',
@@ -37,14 +26,12 @@ function highlightLine(line: string): string {
   interface Token { start: number; end: number; text: string; type: 'comment' | 'string' | 'number' | 'function'; }
   const tokens: Token[] = [];
 
-  // Comments first (lowest priority, but covers the whole tail)
   for (const m of line.matchAll(SYNTAX_COMMENT)) {
     tokens.push({ start: m.index!, end: m.index! + m[0].length, text: m[0], type: 'comment' });
   }
 
   const insideComment = (pos: number) => tokens.some(t => t.type === 'comment' && pos >= t.start && pos < t.end);
 
-  // Strings
   for (const m of line.matchAll(SYNTAX_STRING)) {
     if (insideComment(m.index!)) continue;
     tokens.push({ start: m.index!, end: m.index! + m[0].length, text: m[0], type: 'string' });
@@ -52,13 +39,11 @@ function highlightLine(line: string): string {
 
   const insideString = (pos: number) => tokens.some(t => t.type === 'string' && pos >= t.start && pos < t.end);
 
-  // Numbers
   for (const m of line.matchAll(SYNTAX_NUMBER)) {
     if (insideString(m.index!) || insideComment(m.index!)) continue;
     tokens.push({ start: m.index!, end: m.index! + m[0].length, text: m[0], type: 'number' });
   }
 
-  // Functions
   for (const m of line.matchAll(SYNTAX_FUNCTION)) {
     const name = m[1]!;
     if (!KNOWN_FUNCTIONS.has(name)) continue;
@@ -87,17 +72,12 @@ function highlightLine(line: string): string {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export class PatternPanel implements Component {
   private _invalidate: (() => void) | null = null;
   private _pattern = '';
   private _playing = false;
   private _spinTick = 0;
 
-  // Edit mode state
   private _editMode = false;
   private _cursorLine = 0;
   private _cursorCol = 0;
@@ -105,7 +85,6 @@ export class PatternPanel implements Component {
   private _originalPattern = '';
   private _scrollOffset = 0;
 
-  /** Called when user saves with Ctrl+X. Receives the edited pattern text. */
   onApply: ((pattern: string) => void) | null = null;
 
   setInvalidate(fn: () => void): void {
@@ -116,7 +95,6 @@ export class PatternPanel implements Component {
     const lines: string[] = [];
     const panelWidth = Math.max(20, width);
 
-    // --- Title bar: ┌ Pattern Editor ────────
     const modeLabel = this._editMode ? ' editing ' : '';
     const playingLabel = this._playing
       ? chalk.hex(colors.playing).bold(` ${BRAILLE_DOTS[this._spinTick % BRAILLE_DOTS.length]} playing `)
@@ -127,8 +105,8 @@ export class PatternPanel implements Component {
     const titleVis = visibleWidth(titleText);
     const playingVis = visibleWidth(this._playing ? ` ${BRAILLE_DOTS[0]} playing ` : ' stopped ');
     const modeVis = this._editMode ? visibleWidth(modeLabel) : 0;
-    const borderVis = 2; // ┌ and ┐
-    const gap = 1; // space before playing label
+    const borderVis = 2;
+    const gap = 1;
     const dashCount = Math.max(1, panelWidth - borderVis - titleVis - modeVis - playingVis - gap);
     let topBorder = chalk.hex(colors.border)('┌') + chalk.hex(colors.primary).bold(titleText);
     if (this._editMode) {
@@ -142,18 +120,15 @@ export class PatternPanel implements Component {
     topBorder += ' ' + playingLabel + chalk.hex(colors.border)('┐');
     lines.push(topBorder);
 
-    // --- Pattern lines ---
     const sourceLines = this._editMode ? this._editBuffer : this._pattern.split('\n');
     const patternLines = sourceLines.length === 0 ? [''] : sourceLines;
     const gutterWidth = String(patternLines.length).length;
-    const prefixOverhead = gutterWidth + 4; // gutter + " │ " + space
-    const contentMax = Math.max(10, panelWidth - prefixOverhead - 2); // -2 for borders
+    const prefixOverhead = gutterWidth + 4;
+    const contentMax = Math.max(10, panelWidth - prefixOverhead - 2);
 
-    // Calculate visible area (reserve 1 line for help bar in edit mode)
     const helpBarLines = this._editMode ? 1 : 0;
     const availableHeight = Math.max(1, (height ?? 20) - 2 - helpBarLines);
 
-    // Adjust scroll offset to keep cursor visible
     if (this._editMode) {
       if (this._cursorLine < this._scrollOffset) {
         this._scrollOffset = this._cursorLine;
@@ -173,9 +148,8 @@ export class PatternPanel implements Component {
       for (let i = startLine; i < endLine; i++) {
         const lineNum = String(i + 1).padStart(gutterWidth, ' ');
         const raw = patternLines[i]!;
-        const truncated = raw.length > contentMax ? raw.slice(0, contentMax - 1) + '…' : raw;
+        const truncated = raw.length > contentMax ? raw.slice(0, Math.max(0, contentMax - 1)) + '…' : raw;
 
-        // Gutter: > for current line in edit mode, space otherwise
         const gutterIndicator = this._editMode && i === this._cursorLine ? '>' : ' ';
         const gutter = chalk.hex(colors.textMuted)(`${gutterIndicator}${lineNum}`);
 
@@ -201,7 +175,6 @@ export class PatternPanel implements Component {
       }
     }
 
-    // --- Help bar (edit mode only) ---
     if (this._editMode) {
       const helpText = ' ^X Save&Exit ^E Discard ';
       const helpContent = chalk.hex(colors.textMuted)(helpText);
@@ -210,7 +183,6 @@ export class PatternPanel implements Component {
       lines.push(chalk.hex(colors.border)('│') + helpContent + ' '.repeat(helpPad) + chalk.hex(colors.border)('│'));
     }
 
-    // --- Bottom border: └───────────────────
     lines.push(chalk.hex(colors.border)('└' + '─'.repeat(panelWidth - 2) + '┘'));
 
     return lines;
@@ -258,17 +230,14 @@ export class PatternPanel implements Component {
   handleInput(data: string): boolean {
     if (!this._editMode) return false;
 
-    // Arrow keys
     if (matchesKey(data, Key.up)) { this.moveCursor(-1, 0); return true; }
     if (matchesKey(data, Key.down)) { this.moveCursor(1, 0); return true; }
     if (matchesKey(data, Key.left)) { this.moveCursor(0, -1); return true; }
     if (matchesKey(data, Key.right)) { this.moveCursor(0, 1); return true; }
 
-    // Home / End
     if (matchesKey(data, Key.home)) { this._cursorCol = 0; this.invalidate(); return true; }
     if (matchesKey(data, Key.end)) { this._cursorCol = this._editBuffer[this._cursorLine]!.length; this.invalidate(); return true; }
 
-    // Backspace
     if (matchesKey(data, Key.backspace)) {
       if (this._cursorCol > 0) {
         const line = this._editBuffer[this._cursorLine]!;
@@ -284,7 +253,6 @@ export class PatternPanel implements Component {
       return true;
     }
 
-    // Delete
     if (matchesKey(data, Key.delete)) {
       const line = this._editBuffer[this._cursorLine]!;
       if (this._cursorCol < line.length) {
@@ -296,7 +264,6 @@ export class PatternPanel implements Component {
       return true;
     }
 
-    // Enter
     if (matchesKey(data, Key.enter)) {
       const line = this._editBuffer[this._cursorLine]!;
       const before = line.slice(0, this._cursorCol);
@@ -309,7 +276,6 @@ export class PatternPanel implements Component {
       return true;
     }
 
-    // Printable characters (including Kitty protocol)
     const ch = decodeKittyPrintable(data) ?? (data.length === 1 && data >= ' ' ? data : null);
     if (ch) {
       const line = this._editBuffer[this._cursorLine]!;

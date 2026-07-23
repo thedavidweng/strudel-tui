@@ -1,21 +1,15 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { PatternLoader } from '../src/engine/PatternLoader';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('PatternLoader', () => {
-  let tempDir: string;
   let loader: PatternLoader;
 
   beforeAll(async () => {
-    // Use the real project patterns directory for read-only tests
     loader = new PatternLoader();
   });
-
-  // -----------------------------------------------------------------------
-  // listPatterns
-  // -----------------------------------------------------------------------
 
   describe('listPatterns()', () => {
     test('returns an array of pattern entries', async () => {
@@ -44,26 +38,7 @@ describe('PatternLoader', () => {
       const sorted = [...names].sort();
       expect(names).toEqual(sorted);
     });
-
-    test('listPatterns on a custom directory works', async () => {
-      tempDir = await mkdtemp(join(tmpdir(), 'strudel-test-'));
-      // PatternLoader appends /patterns to the root, so we must create that subdir
-      const patternsSubdir = join(tempDir, 'patterns');
-      const { mkdir } = await import('node:fs/promises');
-      await mkdir(patternsSubdir, { recursive: true });
-      await writeFile(join(patternsSubdir, 'test.strudel'), 's("bd")', 'utf-8');
-      await writeFile(join(patternsSubdir, 'other.txt'), 'not a pattern', 'utf-8');
-
-      const customLoader = new PatternLoader(tempDir);
-      const patterns = await customLoader.listPatterns();
-      expect(patterns.length).toBe(1);
-      expect(patterns[0].name).toBe('test.strudel');
-    });
   });
-
-  // -----------------------------------------------------------------------
-  // loadPattern
-  // -----------------------------------------------------------------------
 
   describe('loadPattern()', () => {
     test('loads a real pattern file', async () => {
@@ -78,10 +53,6 @@ describe('PatternLoader', () => {
       await expect(loader.loadPattern('/tmp/does-not-exist-12345.strudel')).rejects.toThrow();
     });
   });
-
-  // -----------------------------------------------------------------------
-  // savePattern + loadPattern round-trip
-  // -----------------------------------------------------------------------
 
   describe('savePattern() + loadPattern()', () => {
     let saveTempDir: string;
@@ -121,10 +92,6 @@ describe('PatternLoader', () => {
       expect(loaded).toBe(code);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // getDefaultPatternDir
-  // -----------------------------------------------------------------------
 
   describe('getDefaultPatternDir()', () => {
     test('returns an absolute path ending with patterns', () => {

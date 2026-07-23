@@ -14,10 +14,6 @@ describe('KeywordAdapter', () => {
     adapter = new KeywordAdapter(executor, patterns);
   });
 
-  // -------------------------------------------------------------------------
-  // Intent routing
-  // -------------------------------------------------------------------------
-
   describe('intent routing', () => {
     test('"play" returns a play action', async () => {
       const response = await adapter.processMessage('play');
@@ -95,10 +91,6 @@ describe('KeywordAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Edit via ToolExecutor
-  // -------------------------------------------------------------------------
-
   describe('edit routing', () => {
     test('"edit faster" on a pattern applies the edit', async () => {
       patterns.set('s("bd sn")');
@@ -113,10 +105,6 @@ describe('KeywordAdapter', () => {
       expect(response.error).toBeDefined();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Undo/redo through history
-  // -------------------------------------------------------------------------
 
   describe('undo/redo', () => {
     test('"undo" after setting a pattern reverts', async () => {

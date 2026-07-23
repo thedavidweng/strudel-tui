@@ -1,28 +1,3 @@
-/**
- * StrudelTUI — main TUI coordinator class.
- *
- * Fullscreen single-column layout inspired by Kimi Code (PI Agent):
- *
- *   ┌ strudel-tui v0.1.0 ───────────────────── tip ─┐
- *   │ STOPPED · 130 BPM · untitled · ◆ AI · gpt-4o  │
- *   ├─────────────────────────────────────────────────┤  ← StatusBar
- *   │ ╭─────────────────────────────────────────────╮ │
- *   │ │ ┌ Pattern Editor ────────────────── stopped ┐│ │
- *   │ │ │ 1 │ s("bd sn").lpf(800)                  ││ │
- *   │ │ │ 2 │ .room(0.5)                           ││ │
- *   │ │ └───────────────────────────────────────────┘│ │
- *   │ ╰─────────────────────────────────────────────╯ │
- *   │                                                 │
- *   │ ✨ make a chill beat                            │
- *   │ ● Here's a lo-fi pattern with...                │
- *   │                                                 │
- *   ├─────────────────────────────────────────────────┤
- *   │ ╭─────────────────────────────────────────────╮ │
- *   │ │  > _                                        │ │
- *   │ ╰─────────────────────────────────────────────╯ │
- *   └─────────────────────────────────────────────────┘
- */
-
 import { writeFile } from 'node:fs/promises';
 
 import {
@@ -50,10 +25,6 @@ import { SlashCommandMenu } from './SlashCommandMenu.js';
 import { StatusBar } from './StatusBar.js';
 import type { MessageType } from './MessageHistory.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface StrudelTUIOptions {
   initialPattern?: string;
   bpm: number;
@@ -63,38 +34,25 @@ export interface StrudelTUIOptions {
 
 type ConfigPanelMode = 'config' | 'provider' | null;
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const CHROME_GUTTER = 1;
 const DEFAULT_PATTERN = `// Start typing your Strudel pattern here\nd1 $ s "bd sn"`;
 
-/** Slash commands that require an argument before executing. */
 const COMMANDS_WITH_ARGS = ['/make', '/edit', '/load'];
 
-// ---------------------------------------------------------------------------
-// StrudelTUI
-// ---------------------------------------------------------------------------
-
 export class StrudelTUI {
-  // ── Core services ──
   private readonly agent: Agent;
   private readonly audio: AudioController;
   private readonly configManager: ConfigManager;
 
-  // ── TUI plumbing ──
   private readonly terminal: ProcessTerminal;
   private readonly tui: TUI;
 
-  // ── Layout containers ──
-  private readonly statusContainer: Container;    // full width, no gutter
-  private readonly transcriptContainer: GutterContainer;  // 1-col gutter
+  private readonly statusContainer: Container;
+  private readonly transcriptContainer: GutterContainer;
   private readonly slashMenuContainer: GutterContainer;
   private readonly configContainer: GutterContainer;
   private readonly editorContainer: GutterContainer;
 
-  // ── Components ──
   private readonly statusBar: StatusBar;
   private readonly messageHistory: MessageHistory;
   private readonly patternPanel: PatternPanel;
@@ -102,7 +60,6 @@ export class StrudelTUI {
   private readonly inputField: Input;
   private configPanel: InlineConfig | null = null;
 
-  // ── State ──
   private pattern: string;
   private readonly bpm: number;
   private readonly debug: boolean;
@@ -115,27 +72,18 @@ export class StrudelTUI {
   private exitArmed = 0;
   private readonly queuedMessages: string[] = [];
 
-  // ---------------------------------------------------------------------------
-  // Constructor
-  // ---------------------------------------------------------------------------
-
   constructor(options: StrudelTUIOptions) {
     this.pattern = options.initialPattern ?? DEFAULT_PATTERN;
     this.bpm = options.bpm;
     this.debug = options.debug;
 
-    // Services
     this.configManager = new ConfigManager(options.configOverrides);
-    this.agent = new Agent(this.pattern, undefined, options.configOverrides);
     this.audio = new AudioController();
+    this.agent = new Agent(this.pattern, undefined, options.configOverrides, this.audio);
 
-    // TUI
     this.terminal = new ProcessTerminal();
     this.tui = new TUI(this.terminal);
 
-    // ── Build components ──
-
-    // Status bar (full width, 3 lines: title+tip, status, separator)
     this.statusBar = new StatusBar({
       playing: false,
       bpm: this.bpm,
@@ -145,49 +93,31 @@ export class StrudelTUI {
       model: this.configManager.isConfigured() ? this.configManager.get('model') : undefined,
     });
 
-    // Pattern panel (bordered box with syntax highlighting)
     this.patternPanel = new PatternPanel();
     this.patternPanel.setPattern(this.pattern);
 
-    // Message history (transcript)
     this.messageHistory = new MessageHistory();
 
-    // Slash command menu
     this.slashMenu = new SlashCommandMenu();
 
-    // Input field
     this.inputField = new Input();
     this.inputField.onSubmit = (value: string) => this.handleSubmit(value);
 
-    // ── Build containers with Kimi Code gutter pattern ──
-
-    // Status bar: full width (no gutter — visual anchor)
     this.statusContainer = new Container();
     this.statusContainer.addChild(this.statusBar as unknown as Component);
 
-    // Transcript area: pattern panel + messages, with 1-col gutter
     this.transcriptContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.transcriptContainer.addChild(this.patternPanel as unknown as Component);
     this.transcriptContainer.addChild(this.messageHistory as unknown as Component);
 
-    // Slash menu overlay area
     this.slashMenuContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.slashMenuContainer.addChild(this.slashMenu as unknown as Component);
 
-    // Config panel overlay area
     this.configContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
 
-    // Editor: with gutter (borders will be rendered by the editor itself)
     this.editorContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.editorContainer.addChild(this.inputField);
 
-    // ── Assemble fullscreen layout ──
-    // Top → Bottom:
-    //   StatusBar (full width, 3 lines)
-    //   Transcript (pattern + messages, flex-grow)
-    //   SlashMenu (overlay, hidden when empty)
-    //   ConfigPanel (overlay, hidden when null)
-    //   Editor (bottom, fixed height)
     this.tui.addChild(this.statusContainer);
     this.tui.addChild(this.transcriptContainer);
     this.tui.addChild(this.slashMenuContainer);
@@ -195,21 +125,13 @@ export class StrudelTUI {
     this.tui.addChild(this.editorContainer);
   }
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
   start(): void {
-    // Register global input handler
     this.tui.addInputListener((data: string) => this.handleGlobalInput(data));
 
-    // Focus the input field
     this.tui.setFocus(this.inputField);
 
-    // Render welcome
     this.renderWelcome();
 
-    // Start the event loop
     this.tui.start();
 
     this.log('TUI started');
@@ -223,14 +145,10 @@ export class StrudelTUI {
     this.tui.stop();
   }
 
-  // ---------------------------------------------------------------------------
-  // Welcome
-  // ---------------------------------------------------------------------------
-
   private renderWelcome(): void {
     const isConfigured = this.agent.hasLLM;
 
-    // Add welcome info as system messages (matching Kimi Code style)
+    // matching Kimi Code style
     if (isConfigured) {
       this.addMessage('system', '◆ AI agent ready — type a message or send /help for commands');
     } else {
@@ -239,12 +157,7 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Input Handling
-  // ---------------------------------------------------------------------------
-
   private handleGlobalInput(data: string): { consume?: boolean } | undefined {
-    // If config panel is open, forward input to it
     if (this.configPanel) {
       const consumed = this.configPanel.handleInput(data);
       if (consumed) {
@@ -254,7 +167,6 @@ export class StrudelTUI {
       return undefined;
     }
 
-    // ── Ctrl+C: cancel streaming or double-tap to quit ──
     if (matchesKey(data, Key.ctrl('c'))) {
       if (this.streaming) {
         this.streaming = false;
@@ -280,26 +192,22 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Ctrl+P: toggle play/stop ──
     if (matchesKey(data, Key.ctrl('p'))) {
       void this.handlePlayToggle();
       return { consume: true };
     }
 
-    // ── Ctrl+S: save pattern ──
     if (matchesKey(data, Key.ctrl('s'))) {
       void this.handleSave();
       return { consume: true };
     }
 
-    // ── Ctrl+L: clear history ──
     if (matchesKey(data, Key.ctrl('l'))) {
       this.messageHistory.clear();
       this.tui.requestRender();
       return { consume: true };
     }
 
-    // ── Escape: close overlays or clear input ──
     if (matchesKey(data, Key.escape)) {
       if (this.configPanel) {
         this.closeConfigPanel(false);
@@ -320,7 +228,6 @@ export class StrudelTUI {
       return undefined;
     }
 
-    // ── Tab: accept highlighted slash suggestion ──
     if (matchesKey(data, Key.tab) && this.slashMenu.visible) {
       this.slashMenu.confirm();
       const selected = this.slashMenu.getSelected();
@@ -333,7 +240,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Up arrow: navigate suggestions or input history ──
     if (matchesKey(data, Key.up)) {
       if (this.slashMenu.visible) {
         this.slashMenu.navigateUp();
@@ -352,7 +258,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Down arrow: navigate suggestions or input history ──
     if (matchesKey(data, Key.down)) {
       if (this.slashMenu.visible) {
         this.slashMenu.navigateDown();
@@ -371,7 +276,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // Let Input handle everything else; update slash menu after
     queueMicrotask(() => {
       this.slashMenu.setFilter(this.inputField.getValue());
       this.tui.requestRender();
@@ -379,10 +283,6 @@ export class StrudelTUI {
 
     return undefined;
   }
-
-  // ---------------------------------------------------------------------------
-  // Submit / Enter
-  // ---------------------------------------------------------------------------
 
   private handleSubmit(value: string): void {
     const trimmed = value.trim();
@@ -395,7 +295,6 @@ export class StrudelTUI {
     this.inputHistory.push(trimmed);
     this.historyIndex = -1;
 
-    // Slash command
     if (trimmed.startsWith('/')) {
       const cmd = SLASH_COMMANDS.find(
         (c) => c.name === trimmed || c.alias?.includes(trimmed),
@@ -407,14 +306,9 @@ export class StrudelTUI {
       }
     }
 
-    // Regular message → agent
     this.addMessage('user', trimmed);
     this.processUserMessage(trimmed);
   }
-
-  // ---------------------------------------------------------------------------
-  // Slash Command Execution
-  // ---------------------------------------------------------------------------
 
   executeCommand(cmdName: string): void {
     const needsArg = COMMANDS_WITH_ARGS.includes(cmdName);
@@ -440,7 +334,7 @@ export class StrudelTUI {
       '/save': () => { void this.handleSave(); },
       '/clear': () => { this.messageHistory.clear(); },
       '/help': () => { this.addMessage('system', formatHelp()); },
-      '/quit': () => { void this.stop(); process.exit(0); },
+      '/quit': async () => { await this.stop(); process.exit(0); },
       '/undo': () => {
         const restored = this.agent.undo();
         if (restored !== undefined) {
@@ -469,17 +363,12 @@ export class StrudelTUI {
       return;
     }
 
-    // Agent commands (make, edit, validate)
     if (this.agent.hasLLM) {
       this.runStreaming(cmdName);
     } else {
       this.runNonStreaming(cmdName);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // User Messages
-  // ---------------------------------------------------------------------------
 
   private processUserMessage(msg: string): void {
     if (this.streaming) {
@@ -495,10 +384,6 @@ export class StrudelTUI {
       this.runNonStreaming(msg);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Streaming Handler
-  // ---------------------------------------------------------------------------
 
   private runStreaming(message: string): void {
     this.streaming = true;
@@ -557,10 +442,6 @@ export class StrudelTUI {
       case 'tool_result':
         this.updateLastToolMessage(`▸ ${event.name} → ${event.result}`);
         break;
-      case 'pattern_update':
-        this.pattern = event.pattern;
-        this.patternPanel.setPattern(this.pattern);
-        break;
       case 'done':
         if (!this.streamingError) {
           this.finalizeStreamingMessage(event.response.message || this.streamingText);
@@ -578,10 +459,6 @@ export class StrudelTUI {
     this.tui.requestRender();
   }
 
-  // ---------------------------------------------------------------------------
-  // Streaming Message Management
-  // ---------------------------------------------------------------------------
-
   private updateStreamingMessage(): void {
     this.messageHistory.updateOrAddStreamingMessage(this.streamingText + '▌');
   }
@@ -596,19 +473,11 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Message Queue
-  // ---------------------------------------------------------------------------
-
   private flushQueue(): void {
     if (this.queuedMessages.length === 0) return;
     const next = this.queuedMessages.shift()!;
     this.processUserMessage(next);
   }
-
-  // ---------------------------------------------------------------------------
-  // Audio Control
-  // ---------------------------------------------------------------------------
 
   private async handlePlay(): Promise<void> {
     try {
@@ -654,10 +523,6 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Config Panel
-  // ---------------------------------------------------------------------------
-
   private openConfigPanel(mode: ConfigPanelMode): void {
     if (!mode) return;
 
@@ -686,26 +551,14 @@ export class StrudelTUI {
     this.tui.requestRender();
   }
 
-  // ---------------------------------------------------------------------------
-  // Slash Menu Updates
-  // ---------------------------------------------------------------------------
-
   private updateSlashMenu(): void {
     this.slashMenu.setFilter(this.inputField.getValue());
   }
-
-  // ---------------------------------------------------------------------------
-  // Message Helper
-  // ---------------------------------------------------------------------------
 
   private addMessage(type: MessageType, content: string): void {
     this.messageHistory.addMessage({ type, content });
     this.tui.requestRender();
   }
-
-  // ---------------------------------------------------------------------------
-  // Debug Logging
-  // ---------------------------------------------------------------------------
 
   private log(...args: unknown[]): void {
     if (this.debug) {

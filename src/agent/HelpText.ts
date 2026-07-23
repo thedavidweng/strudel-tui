@@ -1,8 +1,3 @@
-/**
- * Help text constants for the Strudel-TUI agent.
- * Commands, keyboard shortcuts, and example patterns.
- */
-
 export interface CommandInfo {
   command: string;
   description: string;
@@ -19,10 +14,6 @@ export interface ExamplePattern {
   code: string;
   description: string;
 }
-
-// ---------------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------------
 
 export const COMMANDS: CommandInfo[] = [
   {
@@ -61,10 +52,6 @@ export const COMMANDS: CommandInfo[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Keyboard shortcuts
-// ---------------------------------------------------------------------------
-
 export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+P', description: 'Toggle play/stop' },
   { keys: 'Ctrl+S', description: 'Save current pattern to file' },
@@ -72,10 +59,6 @@ export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+C', description: 'Quit strudel-tui' },
   { keys: 'Up/Down', description: 'Scroll through input history' },
 ];
-
-// ---------------------------------------------------------------------------
-// Example patterns
-// ---------------------------------------------------------------------------
 
 export const EXAMPLES: ExamplePattern[] = [
   {
@@ -110,13 +93,6 @@ export const EXAMPLES: ExamplePattern[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Help formatter
-// ---------------------------------------------------------------------------
-
-/**
- * Format all help information into a single display string.
- */
 export function formatHelp(): string {
   const lines: string[] = [];
 

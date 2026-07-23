@@ -1,18 +1,6 @@
-/**
- * MessageHistory — pi-tui Component that renders a scrollable message list.
- *
- *   - Type-prefixed lines with chalk coloring
- *   - Scroll offset with auto-scroll-to-bottom on new messages
- *   - Long-line wrapping to fit available width
- */
-
 import chalk from 'chalk';
 import { Component, wrapTextWithAnsi, visibleWidth } from '@earendil-works/pi-tui';
 import { colors } from './theme.js';
-
-// ---------------------------------------------------------------------------
-// Message types
-// ---------------------------------------------------------------------------
 
 export type MessageType = 'user' | 'agent' | 'system' | 'error' | 'tool';
 
@@ -22,10 +10,6 @@ export interface Message {
   timestamp?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Style map — symbol + color per message type
-// ---------------------------------------------------------------------------
-
 const TYPE_STYLE: Record<MessageType, { symbol: string; color: (s: string) => string }> = {
   user:   { symbol: '▸', color: chalk.hex(colors.roleUser) },
   agent:  { symbol: '◆', color: chalk.hex(colors.text) },
@@ -34,31 +18,16 @@ const TYPE_STYLE: Record<MessageType, { symbol: string; color: (s: string) => st
   tool:   { symbol: '⚡', color: chalk.hex(colors.roleTool) },
 };
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export class MessageHistory implements Component {
   private _invalidate: (() => void) | null = null;
   private _messages: Message[] = [];
-  /** Distance from the bottom of the message list. 0 = pinned to bottom. */
   private _scrollOffset = 0;
-  /** Index of the current streaming message (-1 when not streaming). */
   private _streamingIndex = -1;
-
-  // -- Component interface --------------------------------------------------
 
   setInvalidate(fn: () => void): void {
     this._invalidate = fn;
   }
 
-  /**
-   * Render the visible message lines.
-   *
-   * @param width  - available column width
-   * @param height - available row count (lines). When omitted every wrapped
-   *                 line for every message is returned (no scrolling).
-   */
   render(width: number, height?: number): string[] {
     const contentWidth = Math.max(10, width - 2);
     const allLines = this._buildAllLines(contentWidth);
@@ -67,17 +36,14 @@ export class MessageHistory implements Component {
       return allLines;
     }
 
-    // Apply scroll offset (offset 0 = last `height` lines = pinned to bottom)
     const end = allLines.length - this._scrollOffset;
     const start = Math.max(0, end - height);
     return allLines.slice(start, end);
   }
 
-  // -- Public API -----------------------------------------------------------
-
   addMessage(msg: Message): void {
     this._messages.push(msg);
-    this._scrollOffset = 0; // auto-scroll to bottom
+    this._scrollOffset = 0;
     this.invalidate();
   }
 
@@ -94,10 +60,6 @@ export class MessageHistory implements Component {
     this.invalidate();
   }
 
-  /**
-   * Update the streaming message in-place (or add it on first delta).
-   * Avoids accumulating duplicate messages on every text_delta.
-   */
   updateOrAddStreamingMessage(content: string): void {
     if (this._streamingIndex >= 0 && this._streamingIndex < this._messages.length) {
       this._messages[this._streamingIndex] = { type: 'agent', content };
@@ -109,9 +71,6 @@ export class MessageHistory implements Component {
     this.invalidate();
   }
 
-  /**
-   * Replace the streaming message with the final text (no cursor).
-   */
   finalizeStreamingMessage(finalText: string): void {
     if (this._streamingIndex >= 0 && this._streamingIndex < this._messages.length) {
       this._messages[this._streamingIndex] = { type: 'agent', content: finalText };
@@ -123,9 +82,6 @@ export class MessageHistory implements Component {
     this.invalidate();
   }
 
-  /**
-   * Update the last tool message in-place (or add it).
-   */
   updateOrAddLastToolMessage(content: string): void {
     const last = this._messages[this._messages.length - 1];
     if (last && last.type === 'tool') {
@@ -147,15 +103,10 @@ export class MessageHistory implements Component {
     this.invalidate();
   }
 
-  // -- Internal -------------------------------------------------------------
-
   invalidate(): void {
     this._invalidate?.();
   }
 
-  /**
-   * Build wrapped lines for every message, one array element per visual line.
-   */
   private _buildAllLines(contentWidth: number): string[] {
     if (this._messages.length === 0) {
       return [chalk.hex(colors.textMuted)('  No messages yet')];
@@ -168,14 +119,12 @@ export class MessageHistory implements Component {
       const prefix = ` ${style.symbol} `;
       const prefixWidth = visibleWidth(prefix);
 
-      // Color the prefix and content
       const styledPrefix = style.color(prefix);
       const textColor = msg.type === 'system'
         ? chalk.hex(colors.textDim)
         : chalk.hex(colors.text);
       const content = msg.content;
 
-      // Wrap the raw content, then apply color per wrapped line
       const maxContentWidth = Math.max(5, contentWidth - prefixWidth);
       const wrappedLines = wrapTextWithAnsi(content, maxContentWidth);
 

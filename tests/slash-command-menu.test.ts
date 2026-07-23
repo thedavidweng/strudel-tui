@@ -121,9 +121,7 @@ describe('SlashCommandMenu', () => {
     test('navigation wraps around', () => {
       menu.setFilter('/');
       const len = menu.length;
-      // Navigate up from 0 should wrap to last
       menu.navigateUp();
-      // Navigate down from last should wrap to 0
       for (let i = 0; i < len; i++) {
         menu.navigateDown();
       }

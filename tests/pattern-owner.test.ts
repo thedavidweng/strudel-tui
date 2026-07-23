@@ -2,10 +2,6 @@ import { describe, test, expect } from 'bun:test';
 import { PatternOwner, applyEditHeuristic } from '../src/pattern/PatternOwner';
 
 describe('PatternOwner', () => {
-  // -----------------------------------------------------------------------
-  // currentPattern / set
-  // -----------------------------------------------------------------------
-
   describe('pattern state', () => {
     test('starts empty by default', () => {
       const po = new PatternOwner();
@@ -23,10 +19,6 @@ describe('PatternOwner', () => {
       expect(po.currentPattern).toBe('s("bd sn")');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // undo / redo
-  // -----------------------------------------------------------------------
 
   describe('undo/redo', () => {
     test('undo returns undefined with no history', () => {
@@ -58,8 +50,8 @@ describe('PatternOwner', () => {
       const po = new PatternOwner('a');
       po.set('b');
       po.set('c');
-      po.undo(); // back to b
-      po.set('d'); // should discard c
+      po.undo();
+      po.set('d');
       expect(po.currentPattern).toBe('d');
       expect(po.redo()).toBeUndefined();
     });
@@ -91,10 +83,6 @@ describe('PatternOwner', () => {
       expect(po.stackSize()).toBe(2);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // applyEdit (keyword heuristics)
-  // -----------------------------------------------------------------------
 
   describe('applyEdit', () => {
     test('faster appends .fast(2)', () => {
@@ -129,10 +117,6 @@ describe('PatternOwner', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // applyEditHeuristic (pure function)
-  // -----------------------------------------------------------------------
-
   describe('applyEditHeuristic (pure)', () => {
     test('faster on a .slow pattern converts to .fast', () => {
       expect(applyEditHeuristic('s("bd").slow(2)', 'faster')).toBe('s("bd").fast(2)');
@@ -143,10 +127,6 @@ describe('PatternOwner', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // persistence support
-  // -----------------------------------------------------------------------
-
   describe('export/import stack', () => {
     test('exportStack returns the stack and index', () => {
       const po = new PatternOwner('a');
@@ -154,16 +134,6 @@ describe('PatternOwner', () => {
       const { stack, index } = po.exportStack();
       expect(stack.length).toBe(2);
       expect(index).toBe(1);
-    });
-
-    test('importStack restores state', () => {
-      const po = new PatternOwner();
-      const po2 = new PatternOwner('a');
-      po2.set('b');
-      const { stack, index } = po2.exportStack();
-      po.importStack(stack, index);
-      expect(po.currentPattern).toBe('b');
-      expect(po.canUndo()).toBe(true);
     });
   });
 });

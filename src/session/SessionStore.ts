@@ -1,13 +1,4 @@
-/**
- * SessionStore — persistence for session data.
- *
- * Writes/reads a single JSON file per session at
- * ~/.strudel-tui/sessions/<sessionId>.json containing both the chat
- * messages and the pattern undo/redo stack.  Pure file I/O — no domain
- * logic lives here.
- */
-
-import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { HistoryMessage } from './ChatLog.js';
@@ -31,37 +22,13 @@ function sessionDir(): string {
 }
 
 export class SessionStore {
-  /** Persist the session to disk. Swallows errors (logs a warning). */
   static async save(data: SessionData): Promise<void> {
     try {
-      await mkdir(sessionDir(), { recursive: true });
+      await mkdir(sessionDir(), { recursive: true, mode: 0o700 });
       const filePath = join(sessionDir(), `${data.id}.json`);
-      await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      await writeFile(filePath, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode: 0o600 });
     } catch (err: unknown) {
       console.warn('[SessionStore] Failed to save session:', err instanceof Error ? err.message : err);
-    }
-  }
-
-  /** Load a session from disk by its ID, or null if not found. */
-  static async load(id: string): Promise<SessionData | null> {
-    const filePath = join(sessionDir(), `${id}.json`);
-    try {
-      const raw = await readFile(filePath, 'utf-8');
-      return JSON.parse(raw) as SessionData;
-    } catch {
-      return null;
-    }
-  }
-
-  /** List all saved session IDs. */
-  static async listSessions(): Promise<string[]> {
-    try {
-      const files = await readdir(sessionDir());
-      return files
-        .filter((f) => f.endsWith('.json'))
-        .map((f) => f.replace(/\.json$/, ''));
-    } catch {
-      return [];
     }
   }
 }

@@ -1,4 +1,4 @@
-import { OpenAIClient, type ChatMessage } from '../llm/OpenAIClient.js';
+import { OpenAIClient } from '../llm/OpenAIClient.js';
 import { ChatHistory } from '../llm/ChatHistory.js';
 import { STRUDEL_TOOLS } from '../llm/tools.js';
 import { ToolExecutor } from './ToolExecutor.js';
@@ -19,18 +19,6 @@ export class LLMAdapter {
     this._chat = new ChatHistory();
   }
 
-  get hasLLM(): boolean {
-    return true;
-  }
-
-  get chatHistory(): readonly ChatMessage[] {
-    return this._chat.messages;
-  }
-
-  clearHistory(): void {
-    this._chat.clear();
-  }
-
   async processMessageStreaming(
     message: string,
     currentPattern: string,
@@ -39,7 +27,6 @@ export class LLMAdapter {
   ): Promise<void> {
     this._chat.addUser(message);
 
-    // Add current pattern context to the request's last user message
     const contextSuffix = currentPattern
       ? `\n\nCurrent pattern:\n\`\`\`\n${currentPattern}\n\`\`\``
       : '\n\nNo pattern loaded.';
@@ -91,7 +78,6 @@ export class LLMAdapter {
         }
       }
 
-      // Process any remaining tool calls (stream ended without tool_call_end)
       if (pendingToolCalls.size > 0) {
         for (const [id, tc] of pendingToolCalls) {
           const args = parseToolArgs(tc.name, tc.arguments);
@@ -101,7 +87,6 @@ export class LLMAdapter {
           this._chat.addToolCall(id, tc.name, tc.arguments, result);
         }
 
-        // Get final response after tool execution
         const followUp = this._llm.streamChat(this._chat.forRequest(''), STRUDEL_TOOLS, signal);
         let followUpText = '';
         for await (const ev of followUp) {

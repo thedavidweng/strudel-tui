@@ -1,13 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 import { Agent } from '../src/agent/Agent';
-import { DiffGenerator } from '../src/agent/DiffGenerator';
 import { formatHelp, COMMANDS, KEYBOARD_SHORTCUTS, EXAMPLES } from '../src/agent/HelpText';
 
 describe('Agent', () => {
-  // -----------------------------------------------------------------------
-  // processUserMessage - intent routing
-  // -----------------------------------------------------------------------
-
   describe('processUserMessage()', () => {
     test('"play" returns a play action', async () => {
       const agent = new Agent('', undefined, { apiKey: '' });
@@ -92,47 +87,6 @@ describe('Agent', () => {
       expect(response.action).toBe('undo');
       expect(response.message).toContain('Nothing to undo');
     });
-  });
-});
-
-describe('DiffGenerator', () => {
-  const gen = new DiffGenerator();
-
-  test('computeDiff returns a unified diff string', () => {
-    const result = gen.computeDiff('line1\nline2', 'line1\nline3');
-    expect(result.text).toBeTruthy();
-    expect(result.text).toContain('@@');
-    expect(result.additions).toBeGreaterThanOrEqual(0);
-    expect(result.removals).toBeGreaterThanOrEqual(0);
-    expect(Array.isArray(result.lines)).toBe(true);
-  });
-
-  test('computeDiff with identical input returns empty text', () => {
-    const result = gen.computeDiff('same\ntext', 'same\ntext');
-    // No changes means empty diff
-    expect(result.text).toBe('');
-    expect(result.additions).toBe(0);
-    expect(result.removals).toBe(0);
-  });
-
-  test('computeDiff detects additions', () => {
-    const result = gen.computeDiff('a', 'a\nb');
-    expect(result.additions).toBeGreaterThan(0);
-    expect(result.text).toContain('+b');
-  });
-
-  test('computeDiff detects removals', () => {
-    const result = gen.computeDiff('a\nb', 'a');
-    expect(result.removals).toBeGreaterThan(0);
-    expect(result.text).toContain('-b');
-  });
-
-  test('applyDiff can round-trip a computed diff', () => {
-    const old = 'hello\nworld';
-    const updated = 'hello\nuniverse';
-    const diff = gen.computeDiff(old, updated);
-    const patched = gen.applyDiff(old, diff.text);
-    expect(patched).toBe(updated);
   });
 });
 

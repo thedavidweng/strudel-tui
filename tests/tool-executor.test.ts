@@ -19,10 +19,6 @@ describe('ToolExecutor', () => {
     executor = new ToolExecutor(patterns);
   });
 
-  // -------------------------------------------------------------------------
-  // Tool dispatch
-  // -------------------------------------------------------------------------
-
   describe('executeTool', () => {
     test('set_pattern validates and sets the pattern', async () => {
       const result = await executor.executeTool('set_pattern', { code: 's("bd sn")' });
@@ -86,10 +82,6 @@ describe('ToolExecutor', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // edit_pattern tool
-  // -------------------------------------------------------------------------
-
   describe('edit_pattern tool', () => {
     test('with instruction applies heuristic edit', async () => {
       patterns.set('s("bd sn")');
@@ -125,10 +117,6 @@ describe('ToolExecutor', () => {
       expect(result).toContain('Could not apply');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Audio wiring
-  // -------------------------------------------------------------------------
 
   describe('audio wiring', () => {
     test('stop_playback calls audio.stop()', async () => {

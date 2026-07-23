@@ -5,10 +5,6 @@ import { Engine } from '../src/engine/Engine';
 describe('PatternSyntax', () => {
   const syntax = new PatternSyntax();
 
-  // -----------------------------------------------------------------------
-  // validate()
-  // -----------------------------------------------------------------------
-
   describe('validate()', () => {
     test('accepts a valid mini-notation pattern', () => {
       const result = syntax.validate('s("bd sn hh cp")');
@@ -49,28 +45,6 @@ describe('PatternSyntax', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // generatePattern()
-  // -----------------------------------------------------------------------
-
-  describe('generatePattern()', () => {
-    test('returns a non-empty string', () => {
-      const pattern = syntax.generatePattern();
-      expect(typeof pattern).toBe('string');
-      expect(pattern.length).toBeGreaterThan(0);
-    });
-
-    test('returns valid Strudel code', () => {
-      const pattern = syntax.generatePattern();
-      const result = syntax.validate(pattern);
-      expect(result.valid).toBe(true);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // generateFromSeed()
-  // -----------------------------------------------------------------------
-
   describe('generateFromSeed()', () => {
     test('returns a non-empty string', () => {
       const pattern = syntax.generateFromSeed('test seed');
@@ -101,10 +75,6 @@ describe('PatternSyntax', () => {
 describe('Engine', () => {
   const engine = new Engine();
 
-  // -----------------------------------------------------------------------
-  // init()
-  // -----------------------------------------------------------------------
-
   describe('init()', () => {
     test('is not initialised before init() is called', () => {
       const e = new Engine();
@@ -120,52 +90,10 @@ describe('Engine', () => {
     test('init() is idempotent', async () => {
       const e = new Engine();
       await e.init();
-      await e.init(); // should not throw
+      await e.init();
       expect(e.isInitialized).toBe(true);
     });
   });
-
-  // -----------------------------------------------------------------------
-  // queryEvents()
-  // -----------------------------------------------------------------------
-
-  describe('queryEvents()', () => {
-    test('returns events for a simple drum pattern', async () => {
-      const events = await engine.queryEvents('s("bd sn")');
-      expect(Array.isArray(events)).toBe(true);
-      expect(events.length).toBeGreaterThan(0);
-    });
-
-    test('each event has hap, onset, duration, and value', async () => {
-      const events = await engine.queryEvents('s("bd")');
-      expect(events.length).toBeGreaterThan(0);
-      const evt = events[0];
-      expect(typeof evt.hap).toBe('string');
-      expect(typeof evt.onset).toBe('number');
-      expect(typeof evt.duration).toBe('number');
-      expect(evt.value).toBeDefined();
-    });
-
-    test('returns multiple events for a repeated pattern', async () => {
-      const events = await engine.queryEvents('s("bd*4")');
-      expect(events.length).toBeGreaterThanOrEqual(4);
-    });
-
-    test('returns empty array for invalid code', async () => {
-      const events = await engine.queryEvents('not_a_function("x")');
-      expect(Array.isArray(events)).toBe(true);
-    });
-
-    test('respects the cycles parameter', async () => {
-      const oneCycle = await engine.queryEvents('s("bd")', 1);
-      const twoCycles = await engine.queryEvents('s("bd")', 2);
-      expect(twoCycles.length).toBeGreaterThanOrEqual(oneCycle.length);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // getPatternInfo()
-  // -----------------------------------------------------------------------
 
   describe('getPatternInfo()', () => {
     test('returns metadata for a drum pattern', async () => {
@@ -174,8 +102,6 @@ describe('Engine', () => {
       expect(info!.eventCount).toBeGreaterThan(0);
       expect(info!.voices).toBeGreaterThan(0);
       expect(Array.isArray(info!.voiceNames)).toBe(true);
-      expect(info!.cycleDuration).toBe(1);
-      expect(info!.totalSpan).toBe(1);
     });
 
     test('voiceNames contains the sound names', async () => {

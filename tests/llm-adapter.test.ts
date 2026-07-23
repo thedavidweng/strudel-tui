@@ -3,10 +3,6 @@ import { LLMAdapter } from '../src/agent/LLMAdapter';
 import { ToolExecutor } from '../src/agent/ToolExecutor';
 import { PatternOwner } from '../src/pattern/PatternOwner';
 
-// ---------------------------------------------------------------------------
-// Helpers — build a ReadableStream from SSE lines
-// ---------------------------------------------------------------------------
-
 function makeSSEStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
@@ -40,10 +36,6 @@ describe('LLMAdapter', () => {
     globalThis.fetch = originalFetch;
   });
 
-  // -------------------------------------------------------------------------
-  // Construction
-  // -------------------------------------------------------------------------
-
   describe('construction', () => {
     test('can be created with a valid config', () => {
       const adapter = new LLMAdapter(executor, patterns, {
@@ -51,22 +43,9 @@ describe('LLMAdapter', () => {
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4',
       });
-      expect(adapter.hasLLM).toBe(true);
-    });
-
-    test('hasLLM is true when constructed', () => {
-      const adapter = new LLMAdapter(executor, patterns, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      expect(adapter.hasLLM).toBe(true);
+      expect(adapter).toBeDefined();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Tool call result feeding
-  // -------------------------------------------------------------------------
 
   describe('tool call handling', () => {
     test('executor is shared between adapter instances', () => {
@@ -76,46 +55,10 @@ describe('LLMAdapter', () => {
         model: 'test-model',
       });
 
-      // The adapter uses the same executor — if the executor sets a pattern,
-      // the adapter sees it
       patterns.set('s("bd sn")');
       expect(patterns.currentPattern).toBe('s("bd sn")');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Chat history management
-  // -------------------------------------------------------------------------
-
-  describe('chat history', () => {
-    test('adapter initializes with system prompt in history', () => {
-      const adapter = new LLMAdapter(executor, patterns, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      // History should contain the system prompt
-      const history = adapter.chatHistory;
-      expect(history.length).toBe(1);
-      expect(history[0].role).toBe('system');
-    });
-
-    test('clearHistory resets chat history to system prompt only', () => {
-      const adapter = new LLMAdapter(executor, patterns, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      adapter.clearHistory();
-      const history = adapter.chatHistory;
-      expect(history.length).toBe(1);
-      expect(history[0].role).toBe('system');
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Error handling — covers catch blocks in processMessageStreaming
-  // -------------------------------------------------------------------------
 
   describe('error handling', () => {
     test('emits error event when fetch throws', async () => {
@@ -155,7 +98,6 @@ describe('LLMAdapter', () => {
     });
 
     test('handles malformed tool_call_end arguments gracefully', async () => {
-      // SSE stream: a tool_call_start + tool_call_end with invalid JSON arguments
       const sse = [
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"play_pattern","arguments":""}}]},"finish_reason":null}]}',
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"not valid json"}}]},"finish_reason":null}]}',
@@ -177,14 +119,11 @@ describe('LLMAdapter', () => {
         if (ev.type === 'done') done = true;
       });
 
-      // The malformed arguments should not crash — tool call is still dispatched
       expect(toolCallSeen).toBe(true);
       expect(done).toBe(true);
     });
 
     test('handles malformed arguments in remaining tool calls', async () => {
-      // SSE stream: tool_call_start but no tool_call_end before [DONE],
-      // so it falls into the "remaining tool calls" path with bad arguments
       const sse = [
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"stop_playback","arguments":"{bad json}"}}]},"finish_reason":null}]}',
         'data: [DONE]',

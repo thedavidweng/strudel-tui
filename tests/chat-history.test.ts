@@ -21,7 +21,6 @@ describe('ChatHistory', () => {
     chat.addUser('play');
     chat.addToolCall('call_1', 'play_pattern', '{"code":"s(\\"bd\\")"}', 'Pattern set');
     const msgs = chat.messages;
-    // system, user, assistant(tool_calls), tool(result)
     expect(msgs.length).toBe(4);
     expect(msgs[2].role).toBe('assistant');
     expect(msgs[2].tool_calls?.[0].id).toBe('call_1');

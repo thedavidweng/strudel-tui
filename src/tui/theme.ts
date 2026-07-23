@@ -1,86 +1,57 @@
-/**
- * Centralized theme — warm palette matching Strudel's identity.
- *
- * Two layers:
- *  - raw palettes (dark / light) with shared hex constants
- *  - exported `colors` (default dark) and `getPalette()` for theme resolution
- *    consumed by every UI component via chalk.hex(...)
- *
- * Also provides pi-tui adapters: createMarkdownTheme() and createEditorTheme().
- */
-
 import type { MarkdownTheme, EditorTheme } from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 
-// ---------------------------------------------------------------------------
-// Semantic color palette
-// ---------------------------------------------------------------------------
-
 export interface ColorPalette {
-  // Brand
   primary: string;
   accent: string;
 
-  // Text
   text: string;
   textStrong: string;
   textDim: string;
   textMuted: string;
 
-  // Surface
   border: string;
   borderFocus: string;
 
-  // State
   success: string;
   warning: string;
   error: string;
 
-  // Roles
   roleUser: string;
   roleAssistant: string;
   roleTool: string;
 
-  // Strudel-specific
   playing: string;
   stopped: string;
   bpm: string;
   pattern: string;
 }
 
-// ---------------------------------------------------------------------------
-// Dark palette — warm orange/amber tones
-// ---------------------------------------------------------------------------
-
 const dark: ColorPalette = {
-  primary: '#E07C4F',    // warm orange (Strudel identity)
-  accent: '#C96B3C',     // deeper orange
+  primary: '#E07C4F',
+  accent: '#C96B3C',
 
-  text: '#C5C5C5',       // soft white, not harsh
-  textStrong: '#E8E8E8', // bright for emphasis
-  textDim: '#7A7A7A',    // readable dim
-  textMuted: '#555555',  // subtle
+  text: '#C5C5C5',
+  textStrong: '#E8E8E8',
+  textDim: '#7A7A7A',
+  textMuted: '#555555',
 
-  border: '#3A3A3A',     // subtle dark border
+  border: '#3A3A3A',
   borderFocus: '#E07C4F',
 
-  success: '#5BA86B',    // muted green
-  warning: '#D4A24C',    // warm amber
-  error: '#D4524C',      // muted red
+  success: '#5BA86B',
+  warning: '#D4A24C',
+  error: '#D4524C',
 
-  roleUser: '#E8A85C',   // warm gold for user
+  roleUser: '#E8A85C',
   roleAssistant: '#C5C5C5',
-  roleTool: '#D4A24C',   // amber for tool calls
+  roleTool: '#D4A24C',
 
   playing: '#5BA86B',
   stopped: '#D4524C',
   bpm: '#D4A24C',
   pattern: '#E07C4F',
 };
-
-// ---------------------------------------------------------------------------
-// Light palette — darker variants for contrast on white backgrounds
-// ---------------------------------------------------------------------------
 
 const light: ColorPalette = {
   primary: '#B85C2F',
@@ -108,34 +79,17 @@ const light: ColorPalette = {
   pattern: '#B85C2F',
 };
 
-// ---------------------------------------------------------------------------
-// Theme resolution
-// ---------------------------------------------------------------------------
-
 export type Theme = 'dark' | 'light';
 
 export function getPalette(theme: Theme = 'dark'): ColorPalette {
   return theme === 'dark' ? dark : light;
 }
 
-/** Convenience: default (dark) palette for direct import. */
 export const colors: ColorPalette = dark;
 
-// ---------------------------------------------------------------------------
-// Shared UI constants
-// ---------------------------------------------------------------------------
-
-/** Braille spinner frames for loading/streaming indicators. */
 export const BRAILLE_DOTS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-// ---------------------------------------------------------------------------
-// pi-tui MarkdownTheme adapter
-// ---------------------------------------------------------------------------
-
-// Strip leading "### " / "#### " / ... hash prefixes from headings (h3+)
-// that pi-tui's renderer emits literally.
-// eslint-disable-next-line no-control-regex
-const HEADING_HASH_PREFIX = /^((?:\[[0-9;]*m)*)#{1,6}[ \t]+/;
+const HEADING_HASH_PREFIX = /^((?:\[[0-9;]*m)*)#{1,6}[ \t]+/;
 
 export function createMarkdownTheme(palette: ColorPalette): MarkdownTheme {
   const stripHash = (text: string): string => text.replace(HEADING_HASH_PREFIX, '$1');
@@ -160,10 +114,6 @@ export function createMarkdownTheme(palette: ColorPalette): MarkdownTheme {
     underline: (text: string) => chalk.underline(text),
   };
 }
-
-// ---------------------------------------------------------------------------
-// pi-tui EditorTheme adapter
-// ---------------------------------------------------------------------------
 
 export function createEditorTheme(palette: ColorPalette): EditorTheme {
   const muted = chalk.hex(palette.textMuted);

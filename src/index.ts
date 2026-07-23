@@ -160,13 +160,11 @@ const main = defineCommand({
       process.exit(1);
     }
 
-    // Build config overrides from CLI flags
     const configOverrides: Partial<StrudelConfig> = {};
     if (args['api-key']) configOverrides.apiKey = args['api-key'];
     if (args['base-url']) configOverrides.baseUrl = args['base-url'];
     if (args.model) configOverrides.model = args.model;
 
-    // Also check environment variables
     if (!configOverrides.apiKey && process.env.OPENAI_API_KEY) {
       configOverrides.apiKey = process.env.OPENAI_API_KEY;
     }
@@ -192,7 +190,6 @@ const main = defineCommand({
     process.stdout.write('\x1b[?1049h');
     process.stdout.write('\x1b[2J\x1b[H');
 
-    // Signal handlers for graceful shutdown
     const shutdown = () => {
       void tui.stop();
       // Restore terminal screen on exit

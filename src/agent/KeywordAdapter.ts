@@ -3,10 +3,6 @@ import { PatternOwner } from '../pattern/PatternOwner.js';
 import type { AgentResponse } from './Agent.js';
 import { formatHelp } from './HelpText.js';
 
-// ---------------------------------------------------------------------------
-// Intent detection
-// ---------------------------------------------------------------------------
-
 type Intent =
   | { type: 'play' }
   | { type: 'stop' }
@@ -41,10 +37,6 @@ function detectIntent(message: string): Intent {
   if (m) return { type: 'edit', instruction: m[2].trim() };
   return { type: 'pattern', code: message };
 }
-
-// ---------------------------------------------------------------------------
-// KeywordAdapter
-// ---------------------------------------------------------------------------
 
 export class KeywordAdapter {
   private _executor: ToolExecutor;

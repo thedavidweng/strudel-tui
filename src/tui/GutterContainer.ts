@@ -1,11 +1,3 @@
-/**
- * GutterContainer — wraps children with left/right character padding.
- *
- * Ported from Kimi Code's GutterContainer. With CHROME_GUTTER = 1,
- * every chrome element gets 1 column of left padding and 1 column of
- * right padding (logical — right padding is implicit via reduced width).
- */
-
 import { Container } from '@earendil-works/pi-tui';
 
 export class GutterContainer extends Container {

@@ -59,10 +59,6 @@ export interface ModelInfo {
   owned_by?: string;
 }
 
-/**
- * Fetch available models from an OpenAI-compatible API.
- * GET /models with Bearer auth.
- */
 export async function fetchModels(apiKey: string, baseUrl: string): Promise<ModelInfo[]> {
   const url = baseUrl.replace(/\/+$/, '') + '/models';
   const response = await fetch(url, {
@@ -72,10 +68,9 @@ export async function fetchModels(apiKey: string, baseUrl: string): Promise<Mode
     throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
   }
   const data = await response.json() as { data: Array<{ id: string; name?: string; owned_by?: string }> };
-  const models = (data.data || [])
+  return (data.data || [])
     .map(m => ({ id: m.id, name: m.name || m.id, owned_by: m.owned_by }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  return models;
 }
 
 export class OpenAIClient {
@@ -87,10 +82,10 @@ export class OpenAIClient {
 
   constructor(config: StrudelConfig & { apiKey: string }) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    this.model = config.model || 'gpt-4o';
-    this.temperature = config.temperature ?? 0.7;
-    this.maxTokens = config.maxTokens ?? 4096;
+    this.baseUrl = config.baseUrl!.replace(/\/+$/, '');
+    this.model = config.model!;
+    this.temperature = config.temperature!;
+    this.maxTokens = config.maxTokens!;
   }
 
   async *streamChat(
@@ -133,14 +128,12 @@ export class OpenAIClient {
 
     const parser = new SSEParser(response.body);
 
-    // Accumulate tool calls across chunks
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
     try {
       let data: string | null;
       while ((data = await parser.next()) !== null) {
         if (data === '[DONE]') {
-          // Emit accumulated tool calls
           for (const [_index, tc] of toolCalls) {
             yield {
               type: 'tool_call_end',
@@ -207,8 +200,6 @@ export class OpenAIClient {
             return;
           }
         } catch (err: unknown) {
-          // Skip malformed JSON chunks — the SSE stream may contain
-          // partial data or keep-alive comments that aren't valid JSON.
           if (data !== '[DONE]') {
             console.warn('[OpenAIClient] skipping malformed SSE chunk:', err instanceof Error ? err.message : err);
           }

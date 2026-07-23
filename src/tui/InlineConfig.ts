@@ -1,26 +1,8 @@
-/**
- * InlineConfig — pi-tui Component for inline AI configuration.
- *
- * Two modes:
- *   'config'   — full wizard: provider -> api-key -> base-url -> model -> confirm
- *   'provider' — quick switch: provider -> save (no API key needed)
- *
- * Renders as a bordered panel with chalk styling.
- * Uses arrow keys for list navigation, Enter to select, Escape to cancel.
- * API key input is masked with '*'.
- * Fetches models from API when available, falls back to manual entry.
- * Shows a braille spinner during model fetch.
- */
-
 import chalk from 'chalk';
-import { Component, matchesKey, CURSOR_MARKER } from '@earendil-works/pi-tui';
+import { Component, matchesKey, CURSOR_MARKER, visibleWidth } from '@earendil-works/pi-tui';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { fetchModels, type ModelInfo } from '../llm/OpenAIClient.js';
 import { colors, BRAILLE_DOTS } from './theme.js';
-
-// ---------------------------------------------------------------------------
-// Provider presets
-// ---------------------------------------------------------------------------
 
 interface ProviderPreset {
   label: string;
@@ -39,34 +21,14 @@ const PROVIDERS: ProviderPreset[] = [
   { label: 'Custom (OpenAI Compatible)', value: 'custom', baseUrl: '', model: '' },
 ];
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type ConfigStep = 'provider' | 'api-key' | 'base-url' | 'fetching-models' | 'select-model' | 'confirm';
 type Mode = 'config' | 'provider';
-
-// ---------------------------------------------------------------------------
-// ANSI strip helper (for visible-width calculation)
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1B\[[0-9;]*m/g;
-
-function stripAnsi(str: string): string {
-  return str.replace(ANSI_RE, '');
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export class InlineConfig implements Component {
   private _invalidate: (() => void) | null = null;
   private _mode: Mode;
   private _onClose: (saved: boolean) => void;
 
-  // Wizard state
   private _step: ConfigStep = 'provider';
   private _provider: ProviderPreset | null = null;
   private _apiKey = '';
@@ -75,11 +37,8 @@ export class InlineConfig implements Component {
   private _models: ModelInfo[] = [];
   private _fetchError: string | null = null;
 
-  // Navigation / input state
   private _selectedIndex = 0;
   private _cursorPos = 0;
-
-  // Spinner tick
   private _spinTick = 0;
 
   constructor(mode: Mode, onClose: (saved: boolean) => void) {
@@ -87,23 +46,16 @@ export class InlineConfig implements Component {
     this._onClose = onClose;
   }
 
-  // -- Component interface --------------------------------------------------
-
   setInvalidate(fn: () => void): void {
     this._invalidate = fn;
   }
 
-  /**
-   * Handle a single key event. Returns true when the input was consumed.
-   */
   handleInput(data: string): boolean {
-    // Escape always cancels the entire panel
     if (matchesKey(data, 'escape')) {
       this._onClose(false);
       return true;
     }
 
-    // Block input while the model-fetch spinner is active
     if (this._step === 'fetching-models') return true;
 
     switch (this._step) {
@@ -164,36 +116,27 @@ export class InlineConfig implements Component {
     }
   }
 
-  /**
-   * Render the config panel as an array of lines.
-   */
   render(width: number, _height?: number): string[] {
     this._spinTick++;
 
     const lines: string[] = [];
-    // panelWidth = horizontal fill between corners; total = panelWidth + 2
     const panelWidth = Math.min(width - 2, 60);
-    const contentWidth = panelWidth; // content between vertical borders
+    const contentWidth = panelWidth;
 
-    // ── Top border ──
     lines.push(chalk.hex(colors.border)('╭' + '─'.repeat(panelWidth) + '╮'));
 
-    // ── Header ──
     const title = this._mode === 'provider' ? 'Switch Provider' : 'AI Configuration';
     const escHint = '(esc to cancel)';
     const headerContent = chalk.hex(colors.primary).bold(` ${title} `) + chalk.hex(colors.textDim)(escHint);
     lines.push(this._borderLine(headerContent, contentWidth));
 
-    // ── Separator ──
     lines.push(chalk.hex(colors.border)('├' + '─'.repeat(panelWidth) + '┤'));
 
-    // ── Fetch error (shown above model list / manual entry) ──
     if (this._step === 'select-model' && this._fetchError) {
       lines.push(this._borderLine(chalk.hex(colors.warning)(` ${this._fetchError}`), contentWidth));
       lines.push(this._borderLine('', contentWidth));
     }
 
-    // ── Step content ──
     switch (this._step) {
       case 'provider':
         this._renderProviderList(lines, contentWidth);
@@ -219,13 +162,10 @@ export class InlineConfig implements Component {
         break;
     }
 
-    // ── Bottom border ──
     lines.push(chalk.hex(colors.border)('╰' + '─'.repeat(panelWidth) + '╯'));
 
     return lines;
   }
-
-  // -- Private: list navigation handler -------------------------------------
 
   private _handleListInput(data: string, itemCount: number, onConfirm: (index: number) => void): boolean {
     if (matchesKey(data, 'up')) {
@@ -244,8 +184,6 @@ export class InlineConfig implements Component {
     }
     return false;
   }
-
-  // -- Private: text input handler ------------------------------------------
 
   private _handleTextInput(data: string, onSubmit: (value: string) => void): boolean {
     if (matchesKey(data, 'return')) {
@@ -290,7 +228,6 @@ export class InlineConfig implements Component {
       return true;
     }
 
-    // Printable character insertion (skip control / meta chords)
     if (data.length === 1 && data.charCodeAt(0) >= 32) {
       const val = this._getInputValue();
       this._setInputValue(val.slice(0, this._cursorPos) + data + val.slice(this._cursorPos));
@@ -301,8 +238,6 @@ export class InlineConfig implements Component {
 
     return false;
   }
-
-  // -- Private: input value routing -----------------------------------------
 
   private _getInputValue(): string {
     switch (this._step) {
@@ -321,15 +256,12 @@ export class InlineConfig implements Component {
     }
   }
 
-  // -- Private: provider selection ------------------------------------------
-
   private _selectProvider(preset: ProviderPreset): void {
     this._provider = preset;
     this._baseUrl = preset.baseUrl;
     this._model = preset.model;
 
     if (this._mode === 'provider') {
-      // Quick-switch mode: save provider defaults and close immediately
       const config = new ConfigManager();
       config.set('baseUrl', preset.baseUrl);
       config.set('model', preset.model);
@@ -337,14 +269,11 @@ export class InlineConfig implements Component {
       return;
     }
 
-    // Full config mode: advance to API key entry
     this._step = 'api-key';
     this._cursorPos = 0;
     this._selectedIndex = 0;
     this.invalidate();
   }
-
-  // -- Private: async model fetch -------------------------------------------
 
   private _startModelFetch(): void {
     this._step = 'fetching-models';
@@ -374,8 +303,6 @@ export class InlineConfig implements Component {
       });
   }
 
-  // -- Private: rendering ---------------------------------------------------
-
   private _renderProviderList(lines: string[], cw: number): void {
     lines.push(this._borderLine(chalk.hex(colors.text)(' Select an AI provider:'), cw));
     lines.push(this._borderLine('', cw));
@@ -402,7 +329,6 @@ export class InlineConfig implements Component {
     lines.push(this._borderLine(chalk.hex(colors.text)(` Enter ${label} for ${providerLabel}:`), cw));
     lines.push(this._borderLine('', cw));
 
-    // Build input line with CURSOR_MARKER for IME support
     const display = masked ? '*'.repeat(value.length) : value;
     const before = display.slice(0, this._cursorPos);
     const after = display.slice(this._cursorPos);
@@ -470,15 +396,8 @@ export class InlineConfig implements Component {
     }
   }
 
-  // -- Private: line helpers ------------------------------------------------
-
-  /**
-   * Render a single content line between vertical borders.
-   * Pads with spaces so the right border aligns.
-   */
   private _borderLine(content: string, contentWidth: number): string {
-    const vis = stripAnsi(content).length;
-    const pad = Math.max(0, contentWidth - vis);
+    const pad = Math.max(0, contentWidth - visibleWidth(content));
     return chalk.hex(colors.border)('│') + content + ' '.repeat(pad) + chalk.hex(colors.border)('│');
   }
 
