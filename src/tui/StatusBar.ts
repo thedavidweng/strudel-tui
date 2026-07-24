@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { Component, visibleWidth, truncateToWidth } from '@earendil-works/pi-tui';
 import { colors, BRAILLE_DOTS } from './theme.js';
+import { VERSION } from '../version.js';
 
 const TOOLBAR_TIPS: string[] = [
   'Send /help for all commands',
@@ -72,7 +73,7 @@ export class StatusBar implements Component {
     const tips = isConfigured ? TOOLBAR_TIPS : SETUP_TIPS;
     const tip = tips[this._tipIdx % tips.length]!;
 
-    const title = 'strudel-tui v0.1.0';
+    const title = `strudel-tui v${VERSION}`;
     const styledTitle = chalk.hex(colors.primary).bold(title);
     const styledTip = chalk.hex(colors.textMuted)(tip);
     const titleVis = visibleWidth(title);

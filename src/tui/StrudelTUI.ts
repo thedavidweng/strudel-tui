@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
   type Component,
@@ -13,6 +13,7 @@ import {
 import { Agent } from '../agent/Agent.js';
 import type { AgentEvent } from '../agent/Agent.js';
 import { AudioController } from '../audio/AudioController.js';
+import { PatternLoader } from '../engine/PatternLoader.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
 import { formatHelp } from '../agent/HelpText.js';
@@ -71,6 +72,9 @@ export class StrudelTUI {
   private historyIndex = -1;
   private exitArmed = 0;
   private readonly queuedMessages: string[] = [];
+  private altScreenActive = false;
+  private stopped = false;
+  private savedConsole: Pick<Console, 'log' | 'warn' | 'error'> | null = null;
 
   constructor(options: StrudelTUIOptions) {
     this.pattern = options.initialPattern ?? DEFAULT_PATTERN;
@@ -126,6 +130,15 @@ export class StrudelTUI {
   }
 
   start(): void {
+    // Enter the alternate screen buffer for fullscreen mode.
+    process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
+    this.altScreenActive = true;
+
+    // While the TUI owns the screen, stray console output (audio fallback
+    // warnings, tool errors, library noise) would corrupt the frame —
+    // surface it in the message history instead.
+    this.redirectConsole();
+
     this.tui.addInputListener((data: string) => this.handleGlobalInput(data));
 
     this.tui.setFocus(this.inputField);
@@ -138,11 +151,63 @@ export class StrudelTUI {
   }
 
   async stop(): Promise<void> {
-    if (this.playing) {
-      await this.audio.stop().catch(() => {});
-    }
-    await this.audio.shutdown().catch(() => {});
+    if (this.stopped) return;
+    this.stopped = true;
+
+    this.restoreConsole();
+    // Audio teardown talks to a WebView that may be wedged — cap the wait
+    // so quitting can never hang the terminal.
+    await withTimeout(
+      (async () => {
+        if (this.playing) await this.audio.stop().catch(() => {});
+        await this.audio.shutdown().catch(() => {});
+      })(),
+      2000,
+    );
     this.tui.stop();
+    this.restoreScreen();
+  }
+
+  /** Synchronous best-effort terminal restore for crash paths. */
+  emergencyRestore(): void {
+    this.restoreConsole();
+    try {
+      this.tui.stop();
+    } catch {
+      // Terminal may already be gone.
+    }
+    this.restoreScreen();
+  }
+
+  private restoreScreen(): void {
+    if (this.altScreenActive) {
+      process.stdout.write('\x1b[?1049l');
+      this.altScreenActive = false;
+    }
+  }
+
+  private exit(code = 0): void {
+    void this.stop().finally(() => process.exit(code));
+  }
+
+  private redirectConsole(): void {
+    if (this.savedConsole) return;
+    this.savedConsole = { log: console.log, warn: console.warn, error: console.error };
+    const capture = (type: MessageType) => (...args: unknown[]) => {
+      const text = args
+        .map((a) => (typeof a === 'string' ? a : a instanceof Error ? a.message : String(a)))
+        .join(' ');
+      if (text.trim()) this.addMessage(type, text);
+    };
+    console.log = capture('system');
+    console.warn = capture('system');
+    console.error = capture('error');
+  }
+
+  private restoreConsole(): void {
+    if (!this.savedConsole) return;
+    Object.assign(console, this.savedConsole);
+    this.savedConsole = null;
   }
 
   private renderWelcome(): void {
@@ -177,8 +242,8 @@ export class StrudelTUI {
       }
       const now = Date.now();
       if (now - this.exitArmed < 1500) {
-        void this.stop();
-        process.exit(0);
+        this.exit();
+        return { consume: true };
       } else {
         this.exitArmed = now;
         if (this.inputField.getValue().length > 0) {
@@ -334,7 +399,7 @@ export class StrudelTUI {
       '/save': () => { void this.handleSave(); },
       '/clear': () => { this.messageHistory.clear(); },
       '/help': () => { this.addMessage('system', formatHelp()); },
-      '/quit': async () => { await this.stop(); process.exit(0); },
+      '/quit': () => { this.exit(); },
       '/undo': () => {
         const restored = this.agent.undo();
         if (restored !== undefined) {
@@ -453,6 +518,12 @@ export class StrudelTUI {
         break;
       case 'error':
         this.streamingError = true;
+        // Keep whatever text already streamed in — otherwise the message is
+        // left as a dangling "▌" placeholder.
+        if (this.streamingText) {
+          this.messageHistory.finalizeStreamingMessage(this.streamingText);
+          this.streamingText = '';
+        }
         this.addMessage('error', event.error);
         break;
     }
@@ -514,10 +585,10 @@ export class StrudelTUI {
   }
 
   private async handleSave(): Promise<void> {
-    const filename = 'untitled.strudel';
     try {
-      await writeFile(filename, this.pattern, 'utf-8');
-      this.addMessage('system', `Saved to ${filename}`);
+      const loader = new PatternLoader();
+      await loader.savePattern('untitled', this.pattern);
+      this.addMessage('system', `Saved to ${join(loader.userPatternDir, 'untitled.strudel')}`);
     } catch (err: unknown) {
       this.addMessage('error', `Save error: ${(err instanceof Error ? err.message : String(err))}`);
     }
@@ -542,8 +613,16 @@ export class StrudelTUI {
     this.configPanel = null;
 
     if (saved) {
-      this.statusBar.update({ model: new ConfigManager().get('model') });
-      this.addMessage('system', '◆ Configuration saved · AI agent reloaded');
+      this.agent.reloadConfig();
+      const configured = this.agent.hasLLM;
+      this.statusBar.update({
+        mode: configured ? 'llm' : 'keyword',
+        model: configured ? new ConfigManager().get('model') : undefined,
+      });
+      this.addMessage(
+        'system',
+        configured ? '◆ Configuration saved · AI agent ready' : 'Configuration saved',
+      );
     } else {
       this.addMessage('system', 'Configuration cancelled');
     }
@@ -562,7 +641,14 @@ export class StrudelTUI {
 
   private log(...args: unknown[]): void {
     if (this.debug) {
-      console.error('[StrudelTUI]', ...args);
+      this.addMessage('system', `[debug] ${args.map(String).join(' ')}`);
     }
   }
+}
+
+function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  return Promise.race([
+    promise,
+    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  ]);
 }

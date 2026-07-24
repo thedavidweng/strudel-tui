@@ -2,12 +2,6 @@ import { PatternSyntax } from '../engine/PatternSyntax.js';
 import { Engine } from '../engine/Engine.js';
 import { PatternLoader } from '../engine/PatternLoader.js';
 import { PatternOwner } from '../pattern/PatternOwner.js';
-import { join } from 'node:path';
-
-function sanitizePatternName(name: string): string {
-  const cleaned = String(name ?? '').replace(/[^a-zA-Z0-9_-]/g, '').trim();
-  return cleaned;
-}
 
 export interface AudioControl {
   play(code: string): Promise<void>;
@@ -117,18 +111,14 @@ export class ToolExecutor {
       case 'list_patterns': {
         const patterns = await this._loader.listPatterns();
         if (patterns.length === 0) return 'No pattern files found.';
-        return `Available patterns:\n${patterns.map(p => `  - ${p.name}`).join('\n')}`;
+        return `Available patterns:\n${patterns.map(p => `  - ${p.name}${p.source === 'user' ? ' (user)' : ''}`).join('\n')}`;
       }
 
       case 'load_pattern': {
         try {
-          const safeName = sanitizePatternName(args.name);
-          if (!safeName) return 'Invalid pattern name. Use only letters, numbers, hyphens, and underscores.';
-          const dir = this._loader.getDefaultPatternDir();
-          const filePath = join(dir, `${safeName}.strudel`);
-          const code = await this._loader.loadPattern(filePath);
+          const code = await this._loader.loadPattern(args.name);
           this._patterns.set(code);
-          return `Loaded "${safeName}": ${code}`;
+          return `Loaded "${args.name}": ${code}`;
         } catch (err: unknown) {
           return `Could not load pattern: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -137,12 +127,8 @@ export class ToolExecutor {
       case 'save_pattern': {
         if (!this._patterns.currentPattern.trim()) return 'No pattern to save.';
         try {
-          const safeName = sanitizePatternName(args.name);
-          if (!safeName) return 'Invalid pattern name. Use only letters, numbers, hyphens, and underscores.';
-          const dir = this._loader.getDefaultPatternDir();
-          const filePath = join(dir, `${safeName}.strudel`);
-          await this._loader.savePattern(filePath, this._patterns.currentPattern);
-          return `Pattern saved as "${safeName}".`;
+          await this._loader.savePattern(args.name, this._patterns.currentPattern);
+          return `Pattern saved as "${args.name}" in ${this._loader.userPatternDir}.`;
         } catch (err: unknown) {
           return `Could not save pattern: ${err instanceof Error ? err.message : String(err)}`;
         }

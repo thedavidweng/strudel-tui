@@ -12,6 +12,8 @@ type Intent =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'help' }
+  | { type: 'load'; name: string }
+  | { type: 'list' }
   | { type: 'pattern'; code: string };
 
 const PLAY_RE = /^\s*(play|start|go)\b/i;
@@ -22,18 +24,25 @@ const VALIDATE_RE = /^\s*(validate|check)\b/i;
 const UNDO_RE = /^\s*undo\b/i;
 const REDO_RE = /^\s*redo\b/i;
 const HELP_RE = /^\s*help\b/i;
+const LOAD_RE = /^\s*(load|open)\s+(.+)/i;
+const LIST_RE = /^\s*(list|patterns)\b/i;
 
 function detectIntent(message: string): Intent {
+  // Slash commands ("/make foo") carry the same intents as bare keywords.
+  const normalized = message.replace(/^\s*\//, '');
   let m: RegExpMatchArray | null;
-  if (HELP_RE.test(message)) return { type: 'help' };
-  if (PLAY_RE.test(message)) return { type: 'play' };
-  if (STOP_RE.test(message)) return { type: 'stop' };
-  if (UNDO_RE.test(message)) return { type: 'undo' };
-  if (REDO_RE.test(message)) return { type: 'redo' };
-  if (VALIDATE_RE.test(message)) return { type: 'validate' };
-  m = message.match(GENERATE_RE);
+  if (HELP_RE.test(normalized)) return { type: 'help' };
+  if (PLAY_RE.test(normalized)) return { type: 'play' };
+  if (STOP_RE.test(normalized)) return { type: 'stop' };
+  if (UNDO_RE.test(normalized)) return { type: 'undo' };
+  if (REDO_RE.test(normalized)) return { type: 'redo' };
+  if (VALIDATE_RE.test(normalized)) return { type: 'validate' };
+  if (LIST_RE.test(normalized)) return { type: 'list' };
+  m = normalized.match(LOAD_RE);
+  if (m) return { type: 'load', name: m[2].trim() };
+  m = normalized.match(GENERATE_RE);
   if (m) return { type: 'generate', description: m[2].trim() };
-  m = message.match(EDIT_RE);
+  m = normalized.match(EDIT_RE);
   if (m) return { type: 'edit', instruction: m[2].trim() };
   return { type: 'pattern', code: message };
 }
@@ -115,6 +124,22 @@ export class KeywordAdapter {
         case 'help':
           response = { action: 'help', message: formatHelp() };
           break;
+
+        case 'load': {
+          const result = await this._executor.executeTool('load_pattern', { name: intent.name });
+          if (result.startsWith('Could not')) {
+            response = { action: 'load', message: result, error: result };
+          } else {
+            response = { action: 'load', message: result, pattern: this._patterns.currentPattern };
+          }
+          break;
+        }
+
+        case 'list': {
+          const result = await this._executor.executeTool('list_patterns', {});
+          response = { action: 'list', message: result };
+          break;
+        }
 
         case 'pattern': {
           const result = await this._executor.executeTool('set_pattern', { code: intent.code });

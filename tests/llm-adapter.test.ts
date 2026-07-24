@@ -147,4 +147,114 @@ describe('LLMAdapter', () => {
       expect(done).toBe(true);
     });
   });
+
+  describe('multi-round tool flow', () => {
+    function sequencedFetch(rounds: string[][]): { calls: number } {
+      const state = { calls: 0 };
+      globalThis.fetch = (() => {
+        const sse = rounds[Math.min(state.calls, rounds.length - 1)]!;
+        state.calls++;
+        return Promise.resolve(makeResponse(makeSSEStream(sse)));
+      }) as unknown as typeof fetch;
+      return state;
+    }
+
+    test('text streamed after tool calls is preserved in the done response', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd sn\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"Set a basic beat for you!"},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      let doneMessage = '';
+      await adapter.processMessageStreaming('make a beat', '', (ev) => {
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(2);
+      expect(doneMessage).toBe('Set a basic beat for you!');
+      expect(patterns.currentPattern).toBe('s("bd sn")');
+    });
+
+    test('tool calls in a follow-up round are executed', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd hh\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"Done, two edits."},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      const toolCalls: string[] = [];
+      let doneMessage = '';
+      await adapter.processMessageStreaming('build it up', '', (ev) => {
+        if (ev.type === 'tool_call') toolCalls.push(ev.name);
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(3);
+      expect(toolCalls).toEqual(['set_pattern', 'set_pattern']);
+      expect(patterns.currentPattern).toBe('s("bd hh")');
+      expect(doneMessage).toBe('Done, two edits.');
+    });
+
+    test('text from multiple rounds is combined', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"content":"Let me set that."},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"cp\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"All set!"},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      let doneMessage = '';
+      await adapter.processMessageStreaming('clap please', '', (ev) => {
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(2);
+      expect(doneMessage).toBe('Let me set that.\nAll set!');
+    });
+  });
 });

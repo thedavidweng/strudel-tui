@@ -114,7 +114,7 @@ export const STRUDEL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'list_patterns',
-      description: 'List available .strudel pattern files in the patterns directory.',
+      description: 'List available patterns: built-ins plus files saved in the user pattern directory.',
       parameters: {
         type: 'object',
         properties: {},
@@ -126,7 +126,7 @@ export const STRUDEL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'load_pattern',
-      description: 'Load a .strudel pattern file by name from the patterns directory.',
+      description: 'Load a pattern by name. User-saved patterns shadow built-ins of the same name.',
       parameters: {
         type: 'object',
         properties: {
@@ -143,7 +143,7 @@ export const STRUDEL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'save_pattern',
-      description: 'Save the current pattern to a .strudel file.',
+      description: 'Save the current pattern by name into the user pattern directory.',
       parameters: {
         type: 'object',
         properties: {

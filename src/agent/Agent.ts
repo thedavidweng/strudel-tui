@@ -49,6 +49,20 @@ export class Agent {
     return this._llm !== null;
   }
 
+  /**
+   * Re-reads config from disk and rebuilds the LLM adapter. Called after the
+   * in-app config panel saves, so a newly entered API key takes effect
+   * without restarting. Pattern state and chat log are preserved.
+   */
+  reloadConfig(): void {
+    const config = new ConfigManager();
+    if (config.isConfigured()) {
+      this._llm = new LLMAdapter(this._executor, this._patterns, config.getAll() as StrudelConfig & { apiKey: string });
+    } else {
+      this._llm = null;
+    }
+  }
+
   get currentPattern(): string {
     return this._patterns.currentPattern;
   }

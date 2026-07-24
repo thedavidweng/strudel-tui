@@ -39,6 +39,15 @@ export const COMMANDS: CommandInfo[] = [
     description: 'Validate the current pattern for syntax errors',
   },
   {
+    command: 'list / patterns',
+    description: 'List built-in and saved patterns',
+  },
+  {
+    command: 'load / open <name>',
+    description: 'Load a pattern by name',
+    example: 'load acid',
+  },
+  {
     command: 'undo',
     description: 'Revert to the previous pattern',
   },
@@ -56,7 +65,7 @@ export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+P', description: 'Toggle play/stop' },
   { keys: 'Ctrl+S', description: 'Save current pattern to file' },
   { keys: 'Ctrl+L', description: 'Clear message history' },
-  { keys: 'Ctrl+C', description: 'Quit strudel-tui' },
+  { keys: 'Ctrl+C', description: 'Quit strudel-tui (press twice)' },
   { keys: 'Up/Down', description: 'Scroll through input history' },
 ];
 
