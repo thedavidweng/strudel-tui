@@ -8,9 +8,9 @@ strudel-tui ships with example `.strudel` pattern files in the `patterns/` direc
 |------|-------------|-----|
 | `techno130.strudel` | Four-on-the-floor kick and hi-hat | 130 |
 | `basic-beat.strudel` | Simple 4/4 kick and snare | 120 |
-| `ambient.strudel` | Slow ambient pad | 80 |
+| `ambient.strudel` | Slow ambient pad | 60 |
 | `breakbeat.strudel` | Breakbeat rhythm | 140 |
-| `melody.strudel` | Simple melodic pattern | 120 |
+| `melody.strudel` | Simple melodic pattern | 110 |
 | `acid.strudel` | Acid bassline | 130 |
 
 ## Loading Patterns
@@ -93,16 +93,14 @@ note("c e g").sound("sawtooth").lpf(800)
 
 ## Saving Patterns
 
+Saved patterns live in `~/.strudel-tui/patterns/` and shadow built-ins of the same name. `list` shows both.
+
 ### Keyboard shortcut
 
-Press `Ctrl+S` to save the current pattern to `<patternName>.strudel`.
+Press `Ctrl+S` to save the current pattern as `untitled.strudel`.
 
 ### With AI agent
 
 ```
 > save this as my-beat
 ```
-
-### From CLI
-
-Patterns are saved to the current working directory by default, or to the `patterns/` directory when using the `save_pattern` tool.

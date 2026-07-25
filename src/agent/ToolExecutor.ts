@@ -49,11 +49,12 @@ export class ToolExecutor {
         return 'Playback stopped.';
 
       case 'validate_pattern': {
+        // Syntax-only on purpose: validation must not execute the pattern.
+        // Event/voice analysis (which does evaluate) stays behind the
+        // explicit get_pattern_info tool.
         const result = await this._syntax.validate(args.code);
         if (result.valid) {
-          const info = await this._engine.getPatternInfo(args.code);
-          const infoStr = info ? ` (${info.eventCount} events, ${info.voices} voice${info.voices !== 1 ? 's' : ''})` : '';
-          return `Valid pattern${infoStr}.`;
+          return 'Valid pattern.';
         }
         return `Invalid: ${result.errors?.map(e => e.message).join('; ')}`;
       }

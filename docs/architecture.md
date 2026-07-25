@@ -8,12 +8,12 @@ strudel-tui is organized into four layers, each with a single responsibility.
 ┌─────────────────────────────────────────────┐
 │                  CLI Layer                  │  citty command parsing
 ├─────────────────────────────────────────────┤
-│                  TUI Layer                  │  Ink terminal UI
+│                  TUI Layer                  │  pi-tui terminal UI
 ├─────────────────────────────────────────────┤
 │                 Agent Layer                 │  LLM + keyword routing
 ├──────────────┬──────────────┬───────────────┤
 │  Engine Layer│  Audio Layer │  Config Layer │
-│  @strudel/*  │  Bun.WebView │  config.json  │
+│  @strudel/*  │  browser tab │  config.json  │
 └──────────────┴──────────────┴───────────────┘
 ```
 
@@ -22,6 +22,7 @@ strudel-tui is organized into four layers, each with a single responsibility.
 ```
 src/
 ├── index.ts                     # CLI entry point
+├── version.ts                   # Version, single-sourced from package.json
 │
 ├── config/
 │   └── ConfigManager.ts         # Load/save ~/.strudel-tui/config.json
@@ -34,10 +35,9 @@ src/
 │
 ├── agent/
 │   ├── Agent.ts                 # Main agent (LLM + keyword fallback)
-│   ├── LLMAdapter.ts            # LLM streaming + tool dispatch
+│   ├── LLMAdapter.ts            # LLM streaming + multi-round tool dispatch
 │   ├── KeywordAdapter.ts        # Regex intent detection (no API key)
 │   ├── ToolExecutor.ts          # Tool dispatch (no state)
-│   ├── DiffGenerator.ts         # Unified diff for pattern changes
 │   └── HelpText.ts              # Command/shortcut/example constants
 │
 ├── pattern/
@@ -50,18 +50,21 @@ src/
 ├── engine/
 │   ├── PatternSyntax.ts         # Pure: validate, generate (no runtime)
 │   ├── Engine.ts                # Runtime: evaluate, analyse (requires init)
-│   └── PatternLoader.ts         # Load/save .strudel files
+│   └── PatternLoader.ts         # Embedded built-ins + ~/.strudel-tui/patterns
 │
 ├── audio/
-│   └── AudioController.ts       # Bun.WebView → Strudel WebAudio
+│   ├── AudioController.ts       # Backend selection: WebView → browser → console
+│   └── BrowserBridge.ts         # Localhost server + WebSocket to the audio tab
 │
 └── tui/
-    ├── StrudelTUI.ts            # Main layout + state management
-    ├── InlineConfig.ts           # Interactive config setup
-    ├── StatusBar.ts              # Playback state, BPM, shortcuts
-    ├── MessageHistory.tsx        # Chat + system messages
-    ├── PatternPanel.tsx          # Current pattern display + editor
-    └── InputBox.tsx              # User input
+    ├── StrudelTUI.ts            # Main layout, input handling, screen lifecycle
+    ├── InlineConfig.ts          # Interactive config setup
+    ├── StatusBar.ts             # Playback state, BPM, shortcuts
+    ├── MessageHistory.ts        # Chat + system messages
+    ├── PatternPanel.ts          # Current pattern display + editor
+    ├── SlashCommandMenu.ts      # Slash command autocomplete
+    ├── GutterContainer.ts       # Layout helper
+    └── theme.ts                 # Colors and spinner frames
 ```
 
 ## Data Flow
@@ -80,7 +83,7 @@ User Input
               ┌──────────┐     ┌─────────────┐
               │  Tools   │────▶│  Audio      │
               │  (play,  │     │  Controller │
-              │   edit)  │     │  (WebView)  │
+              │   edit)  │     │  (browser)  │
               └──────────┘     └─────────────┘
 ```
 
@@ -89,7 +92,7 @@ User Input
    - With API key: sends to LLM, which calls tools (play, generate, edit, etc.)
    - Without API key: keyword matching routes to built-in handlers
 3. **Engine** validates and analyzes patterns
-4. **Audio Controller** plays patterns through a hidden WebView
+4. **Audio Controller** plays patterns in a browser tab via the bridge
 
 ## Key Design Decisions
 
@@ -99,29 +102,34 @@ The Agent works in two modes:
 - **LLM mode**: User messages go to an OpenAI-compatible API. The LLM uses function calling to invoke Strudel tools (play, generate, edit, validate, etc.)
 - **Keyword mode**: Simple regex-based intent detection. Works without any API key.
 
-The mode is selected automatically based on whether an API key is configured.
+The mode is selected automatically based on whether an API key is configured, and re-evaluated when the in-app config panel saves.
 
-### Hidden WebView for Audio
+### Browser Bridge for Audio
 
-Bun.WebView spawns a headless WebKit/Chromium instance to run Strudel's WebAudio engine. This avoids bundling a full browser binary. On macOS it uses the system WebKit; on Linux/Windows it uses an installed Chromium. If WebView is unavailable, a console fallback logs patterns instead of playing them.
+A terminal process cannot produce WebAudio, so `BrowserBridge` runs a token-gated HTTP + WebSocket server on `127.0.0.1` and opens a page in the user's default browser. The page loads `@strudel/web` (SRI-pinned from the CDN) and executes play/stop messages pushed from the TUI, which makes live edits replace the running pattern instantly. Browsers require a user gesture before audio can start, so the page asks for one "Enable audio" click; code sent before the click is queued and played on it.
+
+`AudioController` selects a backend at first play: a hidden `Bun.WebView` if the runtime ever ships one, otherwise the browser bridge, otherwise a console fallback that logs patterns.
+
+### Embedded Built-in Patterns
+
+The compiled binary ships without a repo checkout, so `patterns/*.strudel` are embedded at build time via Bun text imports. User-saved patterns live in `~/.strudel-tui/patterns/` and shadow built-ins of the same name.
 
 ### Streaming Responses
 
-In LLM mode, responses stream token-by-token into the TUI. Tool calls are displayed as they execute, and tool results are shown inline. This gives immediate feedback during long operations.
+In LLM mode, responses stream token-by-token into the TUI. Tool calls are displayed as they execute, and tool results are shown inline. Tool rounds are bounded (5, then a forced text round), and ctrl+c aborts the in-flight request via `AbortController`.
 
 ### Pattern Validation Before Playback
 
-All patterns pass through `PatternSyntax.validate()` before reaching the audio layer. This catches syntax errors early and provides structured error messages with line/column information.
+All patterns pass through `PatternSyntax.validate()` before reaching the audio layer. Validation is transpile-only and never executes the pattern; event/voice analysis (which does evaluate the code, in-process) is a separate, explicit `get_pattern_info` tool.
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `bun` | Runtime, build system, WebView |
+| `bun` | Runtime, build system, localhost audio server |
 | `citty` | CLI argument parsing |
-| `ink` | React-based terminal UI |
-| `ink-select-input` | Selection component for TUI |
-| `ink-text-input` | Text input component for TUI |
+| `@earendil-works/pi-tui` | Terminal UI framework |
+| `chalk` | Terminal colors |
 | `@strudel/core` | Pattern evaluation, scheduling |
 | `@strudel/mini` | Mini-notation parser |
 | `@strudel/transpiler` | Code transpilation |

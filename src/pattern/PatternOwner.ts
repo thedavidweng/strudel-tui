@@ -14,11 +14,11 @@ export function applyEditHeuristic(pattern: string, instruction: string): string
     return pattern.trimEnd() + '.slow(2)';
   }
   if (lower.includes('louder') || lower.includes('volume up')) return pattern.trimEnd() + '.gain(1.5)';
-  if (lower.includes('quieter') || lower.includes('softer')) return pattern.trimEnd() + '.gain(0.5)';
+  if (lower.includes('quieter') || lower.includes('softer') || lower.includes('volume down')) return pattern.trimEnd() + '.gain(0.5)';
   if (lower.includes('reverse') || lower.includes('backwards')) return pattern.trimEnd() + '.rev()';
   if (lower.includes('reverb')) return pattern.trimEnd() + '.room(0.5)';
   if (lower.includes('delay')) return pattern.trimEnd() + '.delay(0.5)';
-  if (lower.includes('distort')) return pattern.trimEnd() + '.distort(0.5)';
+  if (lower.includes('distort') || lower.includes('overdrive')) return pattern.trimEnd() + '.distort(0.5)';
   if (lower.includes('filter') || lower.includes('low pass')) return pattern.trimEnd() + '.lpf(800)';
   if (lower.includes('high pass')) return pattern.trimEnd() + '.hpf(800)';
   if (lower.includes('remove last') || lower.includes('undo last')) {

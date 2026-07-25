@@ -21,7 +21,7 @@ const ENGINE_HTML = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>strudel-tui engine</title></head>
 <body>
-<script src="https://unpkg.com/@strudel/web@1.2.6"></script>
+<script src="https://unpkg.com/@strudel/web@1.2.6/dist/index.js" integrity="sha384-6SxFGprJU+pzaOgfaK+HU0ILOMhDKJ6O5uAExCh2wD/WtS5I4xa2cKZpaUuozLlq" crossorigin="anonymous"></script>
 <script>
   (async function() {
     try {

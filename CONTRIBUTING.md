@@ -23,9 +23,9 @@ bun build --compile src/index.ts --outfile dist/<binary>
 # Run tests
 bun test
 
-# Lint and format
+# Lint and typecheck
 bun run lint
-bun run format
+bun run typecheck
 ```
 
 ## Pull Requests

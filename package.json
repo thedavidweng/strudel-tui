@@ -11,6 +11,8 @@
     "start": "bun run src/index.ts",
     "dev": "bun run src/index.ts",
     "test": "bun test",
+    "lint": "oxlint src tests",
+    "typecheck": "tsc --noEmit",
     "build": "bun build src/index.ts --compile --outfile bin/strudel-tui"
   },
   "dependencies": {

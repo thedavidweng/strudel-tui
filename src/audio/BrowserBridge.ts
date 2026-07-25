@@ -201,7 +201,7 @@ function bridgePage(token: string): string {
 <button id="enable">&#9654; Enable audio</button>
 <div id="status">strudel-tui is connected to this tab. Keep it open while you play.</div>
 <pre id="code"></pre>
-<script src="https://unpkg.com/@strudel/web@1.2.6"></script>
+<script src="https://unpkg.com/@strudel/web@1.2.6/dist/index.js" integrity="sha384-6SxFGprJU+pzaOgfaK+HU0ILOMhDKJ6O5uAExCh2wD/WtS5I4xa2cKZpaUuozLlq" crossorigin="anonymous"></script>
 <script>
   const statusEl = document.getElementById('status');
   const codeEl = document.getElementById('code');
