@@ -155,6 +155,7 @@ These keyword-based edits work in both keyword mode and as quick edits in AI mod
 | Keys | Description |
 |------|-------------|
 | `Ctrl+P` | Toggle play/stop |
+| `Ctrl+E` | Edit the pattern in place (`Ctrl+X` save, `Ctrl+E`/`Esc` discard) |
 | `Ctrl+S` | Save current pattern to `~/.strudel-tui/patterns/untitled.strudel` |
 | `Ctrl+L` | Clear message history |
 | `Ctrl+C` | Quit strudel-tui (press twice; single press clears input or interrupts a streaming reply) |

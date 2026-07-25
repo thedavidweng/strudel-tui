@@ -29,6 +29,8 @@ Manual end-to-end tests for strudel-tui. Run these before releases or after majo
 | 2.2 | Verify syntax highlighting | Strings green, functions cyan, numbers yellow |
 | 2.3 | Enter multi-line pattern | Line numbers display correctly |
 | 2.4 | Enter invalid syntax | Error message in chat |
+| 2.5 | Press `Ctrl+E`, edit a line, press `Ctrl+X` | Panel shows "editing" while active; edit is kept and the next agent command sees it |
+| 2.6 | Press `Ctrl+E`, edit, press `Esc` | Edit discarded, original pattern restored |
 
 ### 3. Playback
 

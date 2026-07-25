@@ -150,6 +150,7 @@ With AI agent enabled, you can chat naturally:
 | Keys | Description |
 |------|-------------|
 | `Ctrl+P` | Toggle play/stop |
+| `Ctrl+E` | Edit the pattern in place (`Ctrl+X` save, `Ctrl+E`/`Esc` discard) |
 | `Ctrl+S` | Save current pattern to `~/.strudel-tui/patterns/` |
 | `Ctrl+L` | Clear message history |
 | `Ctrl+C` | Quit (press twice; single press clears input or interrupts the AI) |

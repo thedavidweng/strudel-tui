@@ -63,6 +63,7 @@ export const COMMANDS: CommandInfo[] = [
 
 export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+P', description: 'Toggle play/stop' },
+  { keys: 'Ctrl+E', description: 'Edit pattern in place (Ctrl+X save, Ctrl+E/Esc discard)' },
   { keys: 'Ctrl+S', description: 'Save current pattern to file' },
   { keys: 'Ctrl+L', description: 'Clear message history' },
   { keys: 'Ctrl+C', description: 'Quit strudel-tui (press twice)' },

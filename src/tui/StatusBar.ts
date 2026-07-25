@@ -6,6 +6,7 @@ import { VERSION } from '../version.js';
 const TOOLBAR_TIPS: string[] = [
   'Send /help for all commands',
   'ctrl+p play/stop · ctrl+s save',
+  'ctrl+e edit the pattern in place',
   '/make <desc> to generate a pattern',
   '/edit <instruction> to modify pattern',
   '/config to set up AI provider',

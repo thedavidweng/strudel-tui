@@ -269,6 +269,20 @@ export class StrudelTUI {
       return { consume: true };
     }
 
+    if (this.patternPanel.editMode) {
+      return this.handleEditModeInput(data);
+    }
+
+    if (matchesKey(data, Key.ctrl('e'))) {
+      if (this.streaming) {
+        this.addMessage('system', 'Cannot edit while the agent is working');
+        return { consume: true };
+      }
+      this.patternPanel.enterEditMode();
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
     if (matchesKey(data, Key.ctrl('p'))) {
       void this.handlePlayToggle();
       return { consume: true };
@@ -359,6 +373,31 @@ export class StrudelTUI {
     });
 
     return undefined;
+  }
+
+  private handleEditModeInput(data: string): { consume: boolean } {
+    if (matchesKey(data, Key.ctrl('x'))) {
+      const edited = this.patternPanel.exitEditMode(true);
+      this.pattern = edited;
+      // Commit to the agent's PatternOwner so the next command or LLM
+      // request sees the edit (and undo/redo covers it).
+      this.agent.setPattern(edited);
+      this.addMessage('system', 'Pattern updated');
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
+    if (matchesKey(data, Key.ctrl('e')) || matchesKey(data, Key.escape)) {
+      this.pattern = this.patternPanel.exitEditMode(false);
+      this.addMessage('system', 'Edit discarded');
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
+    this.patternPanel.handleInput(data);
+    this.tui.requestRender();
+    // Swallow everything while editing so the chat input stays inert.
+    return { consume: true };
   }
 
   private handleSubmit(value: string): void {
