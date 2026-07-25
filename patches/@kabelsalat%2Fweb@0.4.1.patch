@@ -1,0 +1,17 @@
+diff --git a/package.json b/package.json
+index 00b02260e0f0872e346a74e6a69b411e928b94d2..f354a19be65d1b3c66c7fe0c4bc5b04addd27b3a 100644
+--- a/package.json
++++ b/package.json
+@@ -16,5 +16,11 @@
+   },
+   "scripts": {
+     "build": "vite build"
++  },
++  "exports": {
++    ".": {
++      "import": "./dist/index.mjs",
++      "require": "./dist/index.js"
++    }
+   }
+ }
+\ No newline at end of file
