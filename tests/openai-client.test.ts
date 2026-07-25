@@ -1,16 +1,12 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 import { OpenAIClient } from '../src/llm/OpenAIClient';
 
-// ---------------------------------------------------------------------------
-// Helpers — build a ReadableStream from SSE lines
-// ---------------------------------------------------------------------------
-
 function makeSSEStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       for (const line of lines) {
-        controller.enqueue(encoder.encode(line + '\n'));
+        controller.enqueue(encoder.encode(line + '\n\n'));
       }
       controller.close();
     },
@@ -23,10 +19,6 @@ function makeResponse(stream: ReadableStream<Uint8Array>, status = 200): Respons
     headers: { 'Content-Type': 'text/event-stream' },
   });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('OpenAIClient', () => {
   const originalFetch = globalThis.fetch;
@@ -110,7 +102,6 @@ describe('OpenAIClient', () => {
       for await (const ev of client.streamChat([{ role: 'user', content: 'hi' }])) {
         if (ev.type === 'text_delta') events.push(ev.delta);
       }
-      // The malformed chunk should be skipped, and the valid one processed
       expect(events).toEqual(['ok']);
     });
 

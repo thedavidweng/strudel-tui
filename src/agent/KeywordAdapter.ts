@@ -1,10 +1,7 @@
 import { ToolExecutor } from './ToolExecutor.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
 import type { AgentResponse } from './Agent.js';
 import { formatHelp } from './HelpText.js';
-
-// ---------------------------------------------------------------------------
-// Intent detection
-// ---------------------------------------------------------------------------
 
 type Intent =
   | { type: 'play' }
@@ -15,6 +12,8 @@ type Intent =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'help' }
+  | { type: 'load'; name: string }
+  | { type: 'list' }
   | { type: 'pattern'; code: string };
 
 const PLAY_RE = /^\s*(play|start|go)\b/i;
@@ -25,31 +24,36 @@ const VALIDATE_RE = /^\s*(validate|check)\b/i;
 const UNDO_RE = /^\s*undo\b/i;
 const REDO_RE = /^\s*redo\b/i;
 const HELP_RE = /^\s*help\b/i;
+const LOAD_RE = /^\s*(load|open)\s+(.+)/i;
+const LIST_RE = /^\s*(list|patterns)\b/i;
 
 function detectIntent(message: string): Intent {
+  // Slash commands ("/make foo") carry the same intents as bare keywords.
+  const normalized = message.replace(/^\s*\//, '');
   let m: RegExpMatchArray | null;
-  if (HELP_RE.test(message)) return { type: 'help' };
-  if (PLAY_RE.test(message)) return { type: 'play' };
-  if (STOP_RE.test(message)) return { type: 'stop' };
-  if (UNDO_RE.test(message)) return { type: 'undo' };
-  if (REDO_RE.test(message)) return { type: 'redo' };
-  if (VALIDATE_RE.test(message)) return { type: 'validate' };
-  m = message.match(GENERATE_RE);
+  if (HELP_RE.test(normalized)) return { type: 'help' };
+  if (PLAY_RE.test(normalized)) return { type: 'play' };
+  if (STOP_RE.test(normalized)) return { type: 'stop' };
+  if (UNDO_RE.test(normalized)) return { type: 'undo' };
+  if (REDO_RE.test(normalized)) return { type: 'redo' };
+  if (VALIDATE_RE.test(normalized)) return { type: 'validate' };
+  if (LIST_RE.test(normalized)) return { type: 'list' };
+  m = normalized.match(LOAD_RE);
+  if (m) return { type: 'load', name: m[2].trim() };
+  m = normalized.match(GENERATE_RE);
   if (m) return { type: 'generate', description: m[2].trim() };
-  m = message.match(EDIT_RE);
+  m = normalized.match(EDIT_RE);
   if (m) return { type: 'edit', instruction: m[2].trim() };
   return { type: 'pattern', code: message };
 }
 
-// ---------------------------------------------------------------------------
-// KeywordAdapter
-// ---------------------------------------------------------------------------
-
 export class KeywordAdapter {
   private _executor: ToolExecutor;
+  private _patterns: PatternOwner;
 
-  constructor(executor: ToolExecutor) {
+  constructor(executor: ToolExecutor, patterns: PatternOwner) {
     this._executor = executor;
+    this._patterns = patterns;
   }
 
   async processMessage(message: string): Promise<AgentResponse> {
@@ -59,7 +63,7 @@ export class KeywordAdapter {
     try {
       switch (intent.type) {
         case 'play':
-          response = { action: 'play', message: 'Starting playback...', pattern: this._executor.currentPattern };
+          response = { action: 'play', message: 'Starting playback...', pattern: this._patterns.currentPattern };
           break;
 
         case 'stop':
@@ -69,36 +73,36 @@ export class KeywordAdapter {
 
         case 'generate': {
           const result = await this._executor.executeTool('generate_pattern', { description: intent.description });
-          response = { action: 'generate', message: result, pattern: this._executor.currentPattern };
+          response = { action: 'generate', message: result, pattern: this._patterns.currentPattern };
           break;
         }
 
         case 'edit': {
-          if (!this._executor.currentPattern.trim()) {
+          if (!this._patterns.currentPattern.trim()) {
             response = { action: 'edit', message: 'No pattern to edit.', error: 'No current pattern' };
             break;
           }
           const result = await this._executor.executeTool('edit_pattern', { instruction: intent.instruction });
-          response = { action: 'edit', message: result, pattern: this._executor.currentPattern };
+          response = { action: 'edit', message: result, pattern: this._patterns.currentPattern };
           break;
         }
 
         case 'validate': {
-          if (!this._executor.currentPattern.trim()) {
+          if (!this._patterns.currentPattern.trim()) {
             response = { action: 'validate', message: 'No pattern to validate.' };
             break;
           }
-          const result = await this._executor.executeTool('validate_pattern', { code: this._executor.currentPattern });
+          const result = await this._executor.executeTool('validate_pattern', { code: this._patterns.currentPattern });
           if (!result.startsWith('Valid')) {
-            response = { action: 'validate', message: result, error: result, pattern: this._executor.currentPattern };
+            response = { action: 'validate', message: result, error: result, pattern: this._patterns.currentPattern };
           } else {
-            response = { action: 'validate', message: result, pattern: this._executor.currentPattern };
+            response = { action: 'validate', message: result, pattern: this._patterns.currentPattern };
           }
           break;
         }
 
         case 'undo': {
-          const restored = this._executor.undoPattern();
+          const restored = this._patterns.undo();
           if (restored === undefined) {
             response = { action: 'undo', message: 'Nothing to undo.' };
           } else {
@@ -108,7 +112,7 @@ export class KeywordAdapter {
         }
 
         case 'redo': {
-          const restored = this._executor.redoPattern();
+          const restored = this._patterns.redo();
           if (restored === undefined) {
             response = { action: 'redo', message: 'Nothing to redo.' };
           } else {
@@ -120,6 +124,22 @@ export class KeywordAdapter {
         case 'help':
           response = { action: 'help', message: formatHelp() };
           break;
+
+        case 'load': {
+          const result = await this._executor.executeTool('load_pattern', { name: intent.name });
+          if (result.startsWith('Could not')) {
+            response = { action: 'load', message: result, error: result };
+          } else {
+            response = { action: 'load', message: result, pattern: this._patterns.currentPattern };
+          }
+          break;
+        }
+
+        case 'list': {
+          const result = await this._executor.executeTool('list_patterns', {});
+          response = { action: 'list', message: result };
+          break;
+        }
 
         case 'pattern': {
           const result = await this._executor.executeTool('set_pattern', { code: intent.code });

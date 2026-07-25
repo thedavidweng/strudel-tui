@@ -1,22 +1,18 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { KeywordAdapter } from '../src/agent/KeywordAdapter';
 import { ToolExecutor } from '../src/agent/ToolExecutor';
-import { SessionHistory } from '../src/agent/SessionHistory';
+import { PatternOwner } from '../src/pattern/PatternOwner';
 
 describe('KeywordAdapter', () => {
   let adapter: KeywordAdapter;
   let executor: ToolExecutor;
-  let history: SessionHistory;
+  let patterns: PatternOwner;
 
   beforeEach(() => {
-    history = new SessionHistory('test-keyword');
-    executor = new ToolExecutor('', history);
-    adapter = new KeywordAdapter(executor);
+    patterns = new PatternOwner('');
+    executor = new ToolExecutor(patterns);
+    adapter = new KeywordAdapter(executor, patterns);
   });
-
-  // -------------------------------------------------------------------------
-  // Intent routing
-  // -------------------------------------------------------------------------
 
   describe('intent routing', () => {
     test('"play" returns a play action', async () => {
@@ -95,13 +91,9 @@ describe('KeywordAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Edit via ToolExecutor
-  // -------------------------------------------------------------------------
-
   describe('edit routing', () => {
     test('"edit faster" on a pattern applies the edit', async () => {
-      executor.setPattern('s("bd sn")');
+      patterns.set('s("bd sn")');
       const response = await adapter.processMessage('edit faster');
       expect(response.action).toBe('edit');
       expect(response.pattern).toContain('.fast(2)');
@@ -114,26 +106,74 @@ describe('KeywordAdapter', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Undo/redo through history
-  // -------------------------------------------------------------------------
-
   describe('undo/redo', () => {
     test('"undo" after setting a pattern reverts', async () => {
-      executor.setPattern('first');
-      executor.setPattern('second');
+      patterns.set('first');
+      patterns.set('second');
       const response = await adapter.processMessage('undo');
       expect(response.action).toBe('undo');
       expect(response.pattern).toBe('first');
     });
 
     test('"redo" after undo re-applies', async () => {
-      executor.setPattern('first');
-      executor.setPattern('second');
+      patterns.set('first');
+      patterns.set('second');
       adapter.processMessage('undo');
       const response = await adapter.processMessage('redo');
       expect(response.action).toBe('redo');
       expect(response.pattern).toBe('second');
+    });
+  });
+
+  describe('slash commands', () => {
+    test('"/play" routes to play like "play"', async () => {
+      const response = await adapter.processMessage('/play');
+      expect(response.action).toBe('play');
+    });
+
+    test('"/make <desc>" generates a pattern', async () => {
+      const response = await adapter.processMessage('/make a techno beat');
+      expect(response.action).toBe('generate');
+      expect(response.pattern).toBeTruthy();
+    });
+
+    test('"/edit <instruction>" routes to edit', async () => {
+      patterns.set('s("bd sn")');
+      const response = await adapter.processMessage('/edit make it faster');
+      expect(response.action).toBe('edit');
+    });
+
+    test('"/help" shows help, not an invalid pattern error', async () => {
+      const response = await adapter.processMessage('/help');
+      expect(response.action).toBe('help');
+      expect(response.error).toBeUndefined();
+    });
+  });
+
+  describe('load and list', () => {
+    test('"list" returns available patterns', async () => {
+      const response = await adapter.processMessage('list');
+      expect(response.action).toBe('list');
+      expect(response.message).toContain('acid');
+    });
+
+    test('"load acid" loads the built-in pattern', async () => {
+      const response = await adapter.processMessage('load acid');
+      expect(response.action).toBe('load');
+      expect(response.error).toBeUndefined();
+      expect(patterns.currentPattern.length).toBeGreaterThan(0);
+    });
+
+    test('"/load acid" works with the slash prefix', async () => {
+      const response = await adapter.processMessage('/load acid');
+      expect(response.action).toBe('load');
+      expect(response.error).toBeUndefined();
+    });
+
+    test('loading an unknown pattern surfaces an error', async () => {
+      const response = await adapter.processMessage('load no-such-pattern-xyz');
+      expect(response.action).toBe('load');
+      expect(response.error).toBeDefined();
     });
   });
 });

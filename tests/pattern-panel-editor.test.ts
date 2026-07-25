@@ -2,10 +2,6 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { Key, matchesKey } from '@earendil-works/pi-tui';
 import { PatternPanel } from '../src/tui/PatternPanel';
 
-// ---------------------------------------------------------------------------
-// Helpers — generate raw terminal data strings that pi-tui matchesKey recognises
-// ---------------------------------------------------------------------------
-
 const KEY = {
   up:        '\x1b[A',
   down:      '\x1b[B',
@@ -16,7 +12,6 @@ const KEY = {
   enter:     '\r',
 };
 
-// Sanity-check that our raw strings actually match the pi-tui Key identifiers
 describe('key-data sanity', () => {
   test('arrow sequences match Key identifiers', () => {
     expect(matchesKey(KEY.up,        Key.up)).toBe(true);
@@ -29,25 +24,16 @@ describe('key-data sanity', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Strip ANSI escape codes so we can assert on visible text in render output
-// ---------------------------------------------------------------------------
 function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-// Helper: extract just the content portion from a rendered line
-// Pattern: "│ <gutter> │ <content>   │"
 function lineContent(renderedLine: string): string {
   const stripped = stripAnsi(renderedLine);
   const match = stripped.match(/│\s*\d+\s*│\s*(.*?)\s*│$/);
   return match ? match[1]! : stripped;
 }
-
-// ---------------------------------------------------------------------------
-// PatternPanel edit mode tests
-// ---------------------------------------------------------------------------
 
 describe('PatternPanel edit mode', () => {
   let panel: PatternPanel;
@@ -55,10 +41,6 @@ describe('PatternPanel edit mode', () => {
   beforeEach(() => {
     panel = new PatternPanel();
   });
-
-  // -----------------------------------------------------------------------
-  // enterEditMode
-  // -----------------------------------------------------------------------
 
   describe('enterEditMode', () => {
     test('sets editMode to true', () => {
@@ -80,7 +62,6 @@ describe('PatternPanel edit mode', () => {
     test('sets cursor to end of last line', () => {
       panel.setPattern('line one\nline two');
       panel.enterEditMode();
-      // After entering edit mode, pressing a character should append to the last line
       panel.handleInput('!');
       const rendered = panel.render(60);
       const lastLineContent = lineContent(rendered[2]!); // line two is rendered at index 2
@@ -91,17 +72,12 @@ describe('PatternPanel edit mode', () => {
       panel.setPattern('');
       panel.enterEditMode();
       expect(panel.editMode).toBe(true);
-      // Typing into an empty buffer should produce content
       panel.handleInput('x');
       const rendered = panel.render(60);
       const content = lineContent(rendered[1]!);
       expect(content).toContain('x');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // exitEditMode(true) — apply
-  // -----------------------------------------------------------------------
 
   describe('exitEditMode(true) — apply', () => {
     test('sets editMode to false', () => {
@@ -114,7 +90,6 @@ describe('PatternPanel edit mode', () => {
     test('pattern is updated to buffer content', () => {
       panel.setPattern('original');
       panel.enterEditMode();
-      // Append some text
       panel.handleInput('!');
       panel.exitEditMode(true);
       const rendered = panel.render(60);
@@ -130,10 +105,6 @@ describe('PatternPanel edit mode', () => {
       expect(result).toBe('hello!');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // exitEditMode(false) — discard
-  // -----------------------------------------------------------------------
 
   describe('exitEditMode(false) — discard', () => {
     test('sets editMode to false', () => {
@@ -164,15 +135,10 @@ describe('PatternPanel edit mode', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // handleInput — character insertion
-  // -----------------------------------------------------------------------
-
   describe('handleInput — character insertion', () => {
     test('inserting a character at end of line appends it', () => {
       panel.setPattern('abc');
       panel.enterEditMode();
-      // Cursor is at end of the single line
       panel.handleInput('d');
       const result = panel.exitEditMode(true);
       expect(result).toBe('abcd');
@@ -181,7 +147,6 @@ describe('PatternPanel edit mode', () => {
     test('inserting a character in the middle of a line inserts it', () => {
       panel.setPattern('ac');
       panel.enterEditMode();
-      // Move cursor left one (now between 'a' and 'c')
       panel.handleInput(KEY.left);
       panel.handleInput('b');
       const result = panel.exitEditMode(true);
@@ -189,18 +154,12 @@ describe('PatternPanel edit mode', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // handleInput — arrow keys
-  // -----------------------------------------------------------------------
-
   describe('handleInput — arrow keys', () => {
     test('left/right moves cursor', () => {
       panel.setPattern('abcde');
       panel.enterEditMode();
-      // Cursor at end (after 'e'). Move left twice => cursor after 'c'
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
-      // Insert 'X' at cursor (after 'c')
       panel.handleInput('X');
       const result = panel.exitEditMode(true);
       expect(result).toBe('abcXde');
@@ -209,9 +168,7 @@ describe('PatternPanel edit mode', () => {
     test('up/down moves between lines', () => {
       panel.setPattern('first\nsecond\nthird');
       panel.enterEditMode();
-      // Cursor is at end of last line ('third'). Move up one line => 'second'
       panel.handleInput(KEY.up);
-      // Append '!' to the line the cursor is now on
       panel.handleInput('!');
       const result = panel.exitEditMode(true);
       const lines = result.split('\n');
@@ -221,15 +178,10 @@ describe('PatternPanel edit mode', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // handleInput — backspace
-  // -----------------------------------------------------------------------
-
   describe('handleInput — backspace', () => {
     test('deletes char before cursor', () => {
       panel.setPattern('abc');
       panel.enterEditMode();
-      // Cursor at end. Backspace removes 'c'
       panel.handleInput(KEY.backspace);
       const result = panel.exitEditMode(true);
       expect(result).toBe('ab');
@@ -238,32 +190,24 @@ describe('PatternPanel edit mode', () => {
     test('at col 0, joins with previous line', () => {
       panel.setPattern('first\nsecond');
       panel.enterEditMode();
-      // Cursor is at end of 'second' (last line). Move to col 0.
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
-      panel.handleInput(KEY.left); // 6 chars in 'second', now at col 0
-      // Backspace at col 0 should join with 'first'
+      panel.handleInput(KEY.left);
       panel.handleInput(KEY.backspace);
       const result = panel.exitEditMode(true);
       expect(result).toBe('firstsecond');
     });
   });
 
-  // -----------------------------------------------------------------------
-  // handleInput — delete
-  // -----------------------------------------------------------------------
-
   describe('handleInput — delete', () => {
     test('deletes char at cursor', () => {
       panel.setPattern('abc');
       panel.enterEditMode();
-      // Move left twice => cursor after 'a'
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
-      // Delete removes 'b'
       panel.handleInput(KEY.delete);
       const result = panel.exitEditMode(true);
       expect(result).toBe('ac');
@@ -272,37 +216,25 @@ describe('PatternPanel edit mode', () => {
     test('at end of line, joins with next line', () => {
       panel.setPattern('first\nsecond');
       panel.enterEditMode();
-      // Cursor at end of last line ('second'). Move up to 'first'
       panel.handleInput(KEY.up);
-      // Cursor is now at end of 'first'. Delete should join 'first' and 'second'
       panel.handleInput(KEY.delete);
       const result = panel.exitEditMode(true);
       expect(result).toBe('firstsecond');
     });
   });
 
-  // -----------------------------------------------------------------------
-  // handleInput — enter (line split)
-  // -----------------------------------------------------------------------
-
   describe('handleInput — enter', () => {
     test('splits line at cursor position', () => {
       panel.setPattern('abcdef');
       panel.enterEditMode();
-      // Move left 3 times => cursor after 'abc'
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
       panel.handleInput(KEY.left);
-      // Press enter => split into 'abc' and 'def'
       panel.handleInput(KEY.enter);
       const result = panel.exitEditMode(true);
       expect(result).toBe('abc\ndef');
     });
   });
-
-  // -----------------------------------------------------------------------
-  // handleInput — unknown keys
-  // -----------------------------------------------------------------------
 
   describe('handleInput — unknown keys', () => {
     test('returns false for unknown keys', () => {
@@ -314,10 +246,6 @@ describe('PatternPanel edit mode', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// render in edit mode — visual indicators
-// ---------------------------------------------------------------------------
 
 describe('render in edit mode', () => {
   let panel: PatternPanel;
@@ -343,7 +271,6 @@ describe('render in edit mode', () => {
 
   test('shows > indicator on current line in edit mode', () => {
     const rendered = panel.render(80);
-    // The cursor line (first and only line in this case) should have a '>' marker
     const cursorLine = rendered[1]!; // index 0 is top border, index 1 is first content line
     expect(cursorLine).toContain('>');
   });
@@ -352,7 +279,6 @@ describe('render in edit mode', () => {
     const rendered = panel.render(80);
     const cursorLine = rendered[1]!;
     const stripped = stripAnsi(cursorLine);
-    // The cursor character (first char of pattern 's') should be present
     // In TTY, chalk.inverse wraps it in ESC[7m; in non-TTY, it's plain text
     expect(stripped).toContain('s("bd sn").lpf(800)');
   });

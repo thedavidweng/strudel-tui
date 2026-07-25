@@ -4,7 +4,7 @@ import { type Component, Container, ProcessTerminal, TUI } from '@earendil-works
 import { ConfigManager } from './config/ConfigManager.js';
 import type { StrudelConfig } from './config/ConfigManager.js';
 import { InlineConfig } from './tui/InlineConfig.js';
-import { StrudelTUI } from './tui/StrudelTUI.js';
+import { VERSION } from './version.js';
 
 const configCmd = defineCommand({
   meta: {
@@ -101,7 +101,7 @@ const configCmd = defineCommand({
 const main = defineCommand({
   meta: {
     name: 'strudel-tui',
-    version: '0.1.0',
+    version: VERSION,
     description: 'Terminal-based live coding interface for Strudel with AI agent',
   },
   args: {
@@ -160,13 +160,11 @@ const main = defineCommand({
       process.exit(1);
     }
 
-    // Build config overrides from CLI flags
     const configOverrides: Partial<StrudelConfig> = {};
     if (args['api-key']) configOverrides.apiKey = args['api-key'];
     if (args['base-url']) configOverrides.baseUrl = args['base-url'];
     if (args.model) configOverrides.model = args.model;
 
-    // Also check environment variables
     if (!configOverrides.apiKey && process.env.OPENAI_API_KEY) {
       configOverrides.apiKey = process.env.OPENAI_API_KEY;
     }
@@ -181,6 +179,10 @@ const main = defineCommand({
       if (configOverrides.apiKey) console.error('[debug] API key configured');
     }
 
+    // Lazy import: the TUI pulls in @strudel packages, which print noise on
+    // load and are not needed for --help/--version/config.
+    const { StrudelTUI } = await import('./tui/StrudelTUI.js');
+
     const tui = new StrudelTUI({
       initialPattern,
       bpm,
@@ -188,19 +190,21 @@ const main = defineCommand({
       configOverrides,
     });
 
-    // Enter alternate screen buffer for fullscreen mode
-    process.stdout.write('\x1b[?1049h');
-    process.stdout.write('\x1b[2J\x1b[H');
-
-    // Signal handlers for graceful shutdown
     const shutdown = () => {
-      void tui.stop();
-      // Restore terminal screen on exit
-      process.stdout.write('\x1b[?1049l');
-      process.exit(0);
+      void tui.stop().finally(() => process.exit(0));
     };
     process.on('SIGTERM', shutdown);
     process.on('SIGHUP', shutdown);
+
+    // A crash must never leave the terminal in the alternate screen with
+    // raw mode on — restore it before reporting the error.
+    const crash = (err: unknown) => {
+      tui.emergencyRestore();
+      console.error(err);
+      process.exit(1);
+    };
+    process.on('uncaughtException', crash);
+    process.on('unhandledRejection', crash);
 
     tui.start();
   },

@@ -1,18 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { LLMAdapter } from '../src/agent/LLMAdapter';
 import { ToolExecutor } from '../src/agent/ToolExecutor';
-import { SessionHistory } from '../src/agent/SessionHistory';
-
-// ---------------------------------------------------------------------------
-// Helpers — build a ReadableStream from SSE lines
-// ---------------------------------------------------------------------------
+import { PatternOwner } from '../src/pattern/PatternOwner';
 
 function makeSSEStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       for (const line of lines) {
-        controller.enqueue(encoder.encode(line + '\n'));
+        controller.enqueue(encoder.encode(line + '\n\n'));
       }
       controller.close();
     },
@@ -28,100 +24,47 @@ function makeResponse(stream: ReadableStream<Uint8Array>, status = 200): Respons
 
 describe('LLMAdapter', () => {
   let executor: ToolExecutor;
-  let history: SessionHistory;
+  let patterns: PatternOwner;
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    history = new SessionHistory('test-llm');
-    executor = new ToolExecutor('', history);
+    patterns = new PatternOwner('');
+    executor = new ToolExecutor(patterns);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
-  // -------------------------------------------------------------------------
-  // Construction
-  // -------------------------------------------------------------------------
-
   describe('construction', () => {
     test('can be created with a valid config', () => {
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4',
       });
-      expect(adapter.hasLLM).toBe(true);
-    });
-
-    test('hasLLM is true when constructed', () => {
-      const adapter = new LLMAdapter(executor, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      expect(adapter.hasLLM).toBe(true);
+      expect(adapter).toBeDefined();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Tool call result feeding
-  // -------------------------------------------------------------------------
 
   describe('tool call handling', () => {
     test('executor is shared between adapter instances', () => {
-      const _adapter = new LLMAdapter(executor, {
+      const _adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
       });
 
-      // The adapter uses the same executor — if the executor sets a pattern,
-      // the adapter sees it
-      executor.setPattern('s("bd sn")');
-      expect(executor.currentPattern).toBe('s("bd sn")');
+      patterns.set('s("bd sn")');
+      expect(patterns.currentPattern).toBe('s("bd sn")');
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Chat history management
-  // -------------------------------------------------------------------------
-
-  describe('chat history', () => {
-    test('adapter initializes with system prompt in history', () => {
-      const adapter = new LLMAdapter(executor, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      // History should contain the system prompt
-      const history = adapter.chatHistory;
-      expect(history.length).toBe(1);
-      expect(history[0].role).toBe('system');
-    });
-
-    test('clearHistory resets chat history to system prompt only', () => {
-      const adapter = new LLMAdapter(executor, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-      adapter.clearHistory();
-      const history = adapter.chatHistory;
-      expect(history.length).toBe(1);
-      expect(history[0].role).toBe('system');
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Error handling — covers catch blocks in processMessageStreaming
-  // -------------------------------------------------------------------------
 
   describe('error handling', () => {
     test('emits error event when fetch throws', async () => {
       globalThis.fetch = (() => Promise.reject(new Error('Network down'))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -140,7 +83,7 @@ describe('LLMAdapter', () => {
     test('emits error event when fetch throws non-Error value', async () => {
       globalThis.fetch = (() => Promise.reject('string error')) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -155,7 +98,6 @@ describe('LLMAdapter', () => {
     });
 
     test('handles malformed tool_call_end arguments gracefully', async () => {
-      // SSE stream: a tool_call_start + tool_call_end with invalid JSON arguments
       const sse = [
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"play_pattern","arguments":""}}]},"finish_reason":null}]}',
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"not valid json"}}]},"finish_reason":null}]}',
@@ -164,7 +106,7 @@ describe('LLMAdapter', () => {
       ];
       globalThis.fetch = (() => Promise.resolve(makeResponse(makeSSEStream(sse)))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -177,21 +119,18 @@ describe('LLMAdapter', () => {
         if (ev.type === 'done') done = true;
       });
 
-      // The malformed arguments should not crash — tool call is still dispatched
       expect(toolCallSeen).toBe(true);
       expect(done).toBe(true);
     });
 
     test('handles malformed arguments in remaining tool calls', async () => {
-      // SSE stream: tool_call_start but no tool_call_end before [DONE],
-      // so it falls into the "remaining tool calls" path with bad arguments
       const sse = [
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"stop_playback","arguments":"{bad json}"}}]},"finish_reason":null}]}',
         'data: [DONE]',
       ];
       globalThis.fetch = (() => Promise.resolve(makeResponse(makeSSEStream(sse)))) as unknown as typeof fetch;
 
-      const adapter = new LLMAdapter(executor, {
+      const adapter = new LLMAdapter(executor, patterns, {
         apiKey: 'sk-test',
         baseUrl: 'https://api.example.com/v1',
         model: 'test-model',
@@ -206,6 +145,116 @@ describe('LLMAdapter', () => {
 
       expect(toolCallSeen).toBe(true);
       expect(done).toBe(true);
+    });
+  });
+
+  describe('multi-round tool flow', () => {
+    function sequencedFetch(rounds: string[][]): { calls: number } {
+      const state = { calls: 0 };
+      globalThis.fetch = (() => {
+        const sse = rounds[Math.min(state.calls, rounds.length - 1)]!;
+        state.calls++;
+        return Promise.resolve(makeResponse(makeSSEStream(sse)));
+      }) as unknown as typeof fetch;
+      return state;
+    }
+
+    test('text streamed after tool calls is preserved in the done response', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd sn\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"Set a basic beat for you!"},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      let doneMessage = '';
+      await adapter.processMessageStreaming('make a beat', '', (ev) => {
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(2);
+      expect(doneMessage).toBe('Set a basic beat for you!');
+      expect(patterns.currentPattern).toBe('s("bd sn")');
+    });
+
+    test('tool calls in a follow-up round are executed', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"bd hh\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"Done, two edits."},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      const toolCalls: string[] = [];
+      let doneMessage = '';
+      await adapter.processMessageStreaming('build it up', '', (ev) => {
+        if (ev.type === 'tool_call') toolCalls.push(ev.name);
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(3);
+      expect(toolCalls).toEqual(['set_pattern', 'set_pattern']);
+      expect(patterns.currentPattern).toBe('s("bd hh")');
+      expect(doneMessage).toBe('Done, two edits.');
+    });
+
+    test('text from multiple rounds is combined', async () => {
+      const state = sequencedFetch([
+        [
+          'data: {"choices":[{"delta":{"content":"Let me set that."},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"set_pattern","arguments":"{\\"code\\":\\"s(\\\\\\"cp\\\\\\")\\"}"}}]},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+          'data: [DONE]',
+        ],
+        [
+          'data: {"choices":[{"delta":{"content":"All set!"},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+          'data: [DONE]',
+        ],
+      ]);
+
+      const adapter = new LLMAdapter(executor, patterns, {
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/v1',
+        model: 'test-model',
+      });
+
+      let doneMessage = '';
+      await adapter.processMessageStreaming('clap please', '', (ev) => {
+        if (ev.type === 'done') doneMessage = ev.response.message;
+      });
+
+      expect(state.calls).toBe(2);
+      expect(doneMessage).toBe('Let me set that.\nAll set!');
     });
   });
 });

@@ -1,29 +1,4 @@
-/**
- * StrudelTUI — main TUI coordinator class.
- *
- * Fullscreen single-column layout inspired by Kimi Code (PI Agent):
- *
- *   ┌ strudel-tui v0.1.0 ───────────────────── tip ─┐
- *   │ STOPPED · 130 BPM · untitled · ◆ AI · gpt-4o  │
- *   ├─────────────────────────────────────────────────┤  ← StatusBar
- *   │ ╭─────────────────────────────────────────────╮ │
- *   │ │ ┌ Pattern Editor ────────────────── stopped ┐│ │
- *   │ │ │ 1 │ s("bd sn").lpf(800)                  ││ │
- *   │ │ │ 2 │ .room(0.5)                           ││ │
- *   │ │ └───────────────────────────────────────────┘│ │
- *   │ ╰─────────────────────────────────────────────╯ │
- *   │                                                 │
- *   │ ✨ make a chill beat                            │
- *   │ ● Here's a lo-fi pattern with...                │
- *   │                                                 │
- *   ├─────────────────────────────────────────────────┤
- *   │ ╭─────────────────────────────────────────────╮ │
- *   │ │  > _                                        │ │
- *   │ ╰─────────────────────────────────────────────╯ │
- *   └─────────────────────────────────────────────────┘
- */
-
-import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
   type Component,
@@ -38,6 +13,7 @@ import {
 import { Agent } from '../agent/Agent.js';
 import type { AgentEvent } from '../agent/Agent.js';
 import { AudioController } from '../audio/AudioController.js';
+import { PatternLoader } from '../engine/PatternLoader.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import type { StrudelConfig } from '../config/ConfigManager.js';
 import { formatHelp } from '../agent/HelpText.js';
@@ -50,10 +26,6 @@ import { SlashCommandMenu } from './SlashCommandMenu.js';
 import { StatusBar } from './StatusBar.js';
 import type { MessageType } from './MessageHistory.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface StrudelTUIOptions {
   initialPattern?: string;
   bpm: number;
@@ -63,38 +35,25 @@ export interface StrudelTUIOptions {
 
 type ConfigPanelMode = 'config' | 'provider' | null;
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const CHROME_GUTTER = 1;
 const DEFAULT_PATTERN = `// Start typing your Strudel pattern here\nd1 $ s "bd sn"`;
 
-/** Slash commands that require an argument before executing. */
 const COMMANDS_WITH_ARGS = ['/make', '/edit', '/load'];
 
-// ---------------------------------------------------------------------------
-// StrudelTUI
-// ---------------------------------------------------------------------------
-
 export class StrudelTUI {
-  // ── Core services ──
   private readonly agent: Agent;
   private readonly audio: AudioController;
   private readonly configManager: ConfigManager;
 
-  // ── TUI plumbing ──
   private readonly terminal: ProcessTerminal;
   private readonly tui: TUI;
 
-  // ── Layout containers ──
-  private readonly statusContainer: Container;    // full width, no gutter
-  private readonly transcriptContainer: GutterContainer;  // 1-col gutter
+  private readonly statusContainer: Container;
+  private readonly transcriptContainer: GutterContainer;
   private readonly slashMenuContainer: GutterContainer;
   private readonly configContainer: GutterContainer;
   private readonly editorContainer: GutterContainer;
 
-  // ── Components ──
   private readonly statusBar: StatusBar;
   private readonly messageHistory: MessageHistory;
   private readonly patternPanel: PatternPanel;
@@ -102,7 +61,6 @@ export class StrudelTUI {
   private readonly inputField: Input;
   private configPanel: InlineConfig | null = null;
 
-  // ── State ──
   private pattern: string;
   private readonly bpm: number;
   private readonly debug: boolean;
@@ -114,28 +72,28 @@ export class StrudelTUI {
   private historyIndex = -1;
   private exitArmed = 0;
   private readonly queuedMessages: string[] = [];
-
-  // ---------------------------------------------------------------------------
-  // Constructor
-  // ---------------------------------------------------------------------------
+  private altScreenActive = false;
+  private stopped = false;
+  private savedConsole: Pick<Console, 'log' | 'warn' | 'error'> | null = null;
+  private streamAbort: AbortController | null = null;
 
   constructor(options: StrudelTUIOptions) {
     this.pattern = options.initialPattern ?? DEFAULT_PATTERN;
     this.bpm = options.bpm;
     this.debug = options.debug;
 
-    // Services
     this.configManager = new ConfigManager(options.configOverrides);
-    this.agent = new Agent(this.pattern, undefined, options.configOverrides);
-    this.audio = new AudioController();
+    this.audio = new AudioController((playing) => {
+      this.playing = playing;
+      this.statusBar.update({ playing });
+      this.patternPanel.setPlaying(playing);
+      this.tui.requestRender();
+    });
+    this.agent = new Agent(this.pattern, undefined, options.configOverrides, this.audio);
 
-    // TUI
     this.terminal = new ProcessTerminal();
     this.tui = new TUI(this.terminal);
 
-    // ── Build components ──
-
-    // Status bar (full width, 3 lines: title+tip, status, separator)
     this.statusBar = new StatusBar({
       playing: false,
       bpm: this.bpm,
@@ -145,49 +103,31 @@ export class StrudelTUI {
       model: this.configManager.isConfigured() ? this.configManager.get('model') : undefined,
     });
 
-    // Pattern panel (bordered box with syntax highlighting)
     this.patternPanel = new PatternPanel();
     this.patternPanel.setPattern(this.pattern);
 
-    // Message history (transcript)
     this.messageHistory = new MessageHistory();
 
-    // Slash command menu
     this.slashMenu = new SlashCommandMenu();
 
-    // Input field
     this.inputField = new Input();
     this.inputField.onSubmit = (value: string) => this.handleSubmit(value);
 
-    // ── Build containers with Kimi Code gutter pattern ──
-
-    // Status bar: full width (no gutter — visual anchor)
     this.statusContainer = new Container();
     this.statusContainer.addChild(this.statusBar as unknown as Component);
 
-    // Transcript area: pattern panel + messages, with 1-col gutter
     this.transcriptContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.transcriptContainer.addChild(this.patternPanel as unknown as Component);
     this.transcriptContainer.addChild(this.messageHistory as unknown as Component);
 
-    // Slash menu overlay area
     this.slashMenuContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.slashMenuContainer.addChild(this.slashMenu as unknown as Component);
 
-    // Config panel overlay area
     this.configContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
 
-    // Editor: with gutter (borders will be rendered by the editor itself)
     this.editorContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     this.editorContainer.addChild(this.inputField);
 
-    // ── Assemble fullscreen layout ──
-    // Top → Bottom:
-    //   StatusBar (full width, 3 lines)
-    //   Transcript (pattern + messages, flex-grow)
-    //   SlashMenu (overlay, hidden when empty)
-    //   ConfigPanel (overlay, hidden when null)
-    //   Editor (bottom, fixed height)
     this.tui.addChild(this.statusContainer);
     this.tui.addChild(this.transcriptContainer);
     this.tui.addChild(this.slashMenuContainer);
@@ -195,42 +135,91 @@ export class StrudelTUI {
     this.tui.addChild(this.editorContainer);
   }
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
   start(): void {
-    // Register global input handler
+    // Enter the alternate screen buffer for fullscreen mode.
+    process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
+    this.altScreenActive = true;
+
+    // While the TUI owns the screen, stray console output (audio fallback
+    // warnings, tool errors, library noise) would corrupt the frame —
+    // surface it in the message history instead.
+    this.redirectConsole();
+
     this.tui.addInputListener((data: string) => this.handleGlobalInput(data));
 
-    // Focus the input field
     this.tui.setFocus(this.inputField);
 
-    // Render welcome
     this.renderWelcome();
 
-    // Start the event loop
     this.tui.start();
 
     this.log('TUI started');
   }
 
   async stop(): Promise<void> {
-    if (this.playing) {
-      await this.audio.stop().catch(() => {});
-    }
-    await this.audio.shutdown().catch(() => {});
+    if (this.stopped) return;
+    this.stopped = true;
+
+    this.restoreConsole();
+    // Audio teardown talks to a WebView that may be wedged — cap the wait
+    // so quitting can never hang the terminal.
+    await withTimeout(
+      (async () => {
+        if (this.playing) await this.audio.stop().catch(() => {});
+        await this.audio.shutdown().catch(() => {});
+      })(),
+      2000,
+    );
     this.tui.stop();
+    this.restoreScreen();
   }
 
-  // ---------------------------------------------------------------------------
-  // Welcome
-  // ---------------------------------------------------------------------------
+  /** Synchronous best-effort terminal restore for crash paths. */
+  emergencyRestore(): void {
+    this.restoreConsole();
+    try {
+      this.tui.stop();
+    } catch {
+      // Terminal may already be gone.
+    }
+    this.restoreScreen();
+  }
+
+  private restoreScreen(): void {
+    if (this.altScreenActive) {
+      process.stdout.write('\x1b[?1049l');
+      this.altScreenActive = false;
+    }
+  }
+
+  private exit(code = 0): void {
+    void this.stop().finally(() => process.exit(code));
+  }
+
+  private redirectConsole(): void {
+    if (this.savedConsole) return;
+    this.savedConsole = { log: console.log, warn: console.warn, error: console.error };
+    const capture = (type: MessageType) => (...args: unknown[]) => {
+      const text = args
+        .map((a) => (typeof a === 'string' ? a : a instanceof Error ? a.message : String(a)))
+        .join(' ');
+      if (text.trim()) this.addMessage(type, text);
+    };
+    console.log = capture('system');
+    console.warn = capture('system');
+    console.error = capture('error');
+  }
+
+  private restoreConsole(): void {
+    if (!this.savedConsole) return;
+    Object.assign(console, this.savedConsole);
+    this.savedConsole = null;
+  }
 
   private renderWelcome(): void {
     const isConfigured = this.agent.hasLLM;
 
-    // Add welcome info as system messages (matching Kimi Code style)
+    // matching Kimi Code style
     if (isConfigured) {
       this.addMessage('system', '◆ AI agent ready — type a message or send /help for commands');
     } else {
@@ -239,12 +228,7 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Input Handling
-  // ---------------------------------------------------------------------------
-
   private handleGlobalInput(data: string): { consume?: boolean } | undefined {
-    // If config panel is open, forward input to it
     if (this.configPanel) {
       const consumed = this.configPanel.handleInput(data);
       if (consumed) {
@@ -254,10 +238,15 @@ export class StrudelTUI {
       return undefined;
     }
 
-    // ── Ctrl+C: cancel streaming or double-tap to quit ──
     if (matchesKey(data, Key.ctrl('c'))) {
       if (this.streaming) {
+        this.streamAbort?.abort();
         this.streaming = false;
+        this.streamingError = true;
+        if (this.streamingText) {
+          this.messageHistory.finalizeStreamingMessage(this.streamingText);
+          this.streamingText = '';
+        }
         this.addMessage('system', 'Interrupted');
         this.statusBar.update({ streaming: false });
         this.tui.requestRender();
@@ -265,8 +254,8 @@ export class StrudelTUI {
       }
       const now = Date.now();
       if (now - this.exitArmed < 1500) {
-        void this.stop();
-        process.exit(0);
+        this.exit();
+        return { consume: true };
       } else {
         this.exitArmed = now;
         if (this.inputField.getValue().length > 0) {
@@ -280,26 +269,36 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Ctrl+P: toggle play/stop ──
+    if (this.patternPanel.editMode) {
+      return this.handleEditModeInput(data);
+    }
+
+    if (matchesKey(data, Key.ctrl('e'))) {
+      if (this.streaming) {
+        this.addMessage('system', 'Cannot edit while the agent is working');
+        return { consume: true };
+      }
+      this.patternPanel.enterEditMode();
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
     if (matchesKey(data, Key.ctrl('p'))) {
       void this.handlePlayToggle();
       return { consume: true };
     }
 
-    // ── Ctrl+S: save pattern ──
     if (matchesKey(data, Key.ctrl('s'))) {
       void this.handleSave();
       return { consume: true };
     }
 
-    // ── Ctrl+L: clear history ──
     if (matchesKey(data, Key.ctrl('l'))) {
       this.messageHistory.clear();
       this.tui.requestRender();
       return { consume: true };
     }
 
-    // ── Escape: close overlays or clear input ──
     if (matchesKey(data, Key.escape)) {
       if (this.configPanel) {
         this.closeConfigPanel(false);
@@ -320,7 +319,6 @@ export class StrudelTUI {
       return undefined;
     }
 
-    // ── Tab: accept highlighted slash suggestion ──
     if (matchesKey(data, Key.tab) && this.slashMenu.visible) {
       this.slashMenu.confirm();
       const selected = this.slashMenu.getSelected();
@@ -333,7 +331,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Up arrow: navigate suggestions or input history ──
     if (matchesKey(data, Key.up)) {
       if (this.slashMenu.visible) {
         this.slashMenu.navigateUp();
@@ -352,7 +349,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // ── Down arrow: navigate suggestions or input history ──
     if (matchesKey(data, Key.down)) {
       if (this.slashMenu.visible) {
         this.slashMenu.navigateDown();
@@ -371,7 +367,6 @@ export class StrudelTUI {
       return { consume: true };
     }
 
-    // Let Input handle everything else; update slash menu after
     queueMicrotask(() => {
       this.slashMenu.setFilter(this.inputField.getValue());
       this.tui.requestRender();
@@ -380,9 +375,30 @@ export class StrudelTUI {
     return undefined;
   }
 
-  // ---------------------------------------------------------------------------
-  // Submit / Enter
-  // ---------------------------------------------------------------------------
+  private handleEditModeInput(data: string): { consume: boolean } {
+    if (matchesKey(data, Key.ctrl('x'))) {
+      const edited = this.patternPanel.exitEditMode(true);
+      this.pattern = edited;
+      // Commit to the agent's PatternOwner so the next command or LLM
+      // request sees the edit (and undo/redo covers it).
+      this.agent.setPattern(edited);
+      this.addMessage('system', 'Pattern updated');
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
+    if (matchesKey(data, Key.ctrl('e')) || matchesKey(data, Key.escape)) {
+      this.pattern = this.patternPanel.exitEditMode(false);
+      this.addMessage('system', 'Edit discarded');
+      this.tui.requestRender();
+      return { consume: true };
+    }
+
+    this.patternPanel.handleInput(data);
+    this.tui.requestRender();
+    // Swallow everything while editing so the chat input stays inert.
+    return { consume: true };
+  }
 
   private handleSubmit(value: string): void {
     const trimmed = value.trim();
@@ -395,7 +411,6 @@ export class StrudelTUI {
     this.inputHistory.push(trimmed);
     this.historyIndex = -1;
 
-    // Slash command
     if (trimmed.startsWith('/')) {
       const cmd = SLASH_COMMANDS.find(
         (c) => c.name === trimmed || c.alias?.includes(trimmed),
@@ -407,14 +422,9 @@ export class StrudelTUI {
       }
     }
 
-    // Regular message → agent
     this.addMessage('user', trimmed);
     this.processUserMessage(trimmed);
   }
-
-  // ---------------------------------------------------------------------------
-  // Slash Command Execution
-  // ---------------------------------------------------------------------------
 
   executeCommand(cmdName: string): void {
     const needsArg = COMMANDS_WITH_ARGS.includes(cmdName);
@@ -440,7 +450,7 @@ export class StrudelTUI {
       '/save': () => { void this.handleSave(); },
       '/clear': () => { this.messageHistory.clear(); },
       '/help': () => { this.addMessage('system', formatHelp()); },
-      '/quit': () => { void this.stop(); process.exit(0); },
+      '/quit': () => { this.exit(); },
       '/undo': () => {
         const restored = this.agent.undo();
         if (restored !== undefined) {
@@ -469,18 +479,12 @@ export class StrudelTUI {
       return;
     }
 
-    // Agent commands (make, edit, validate)
-    this.agent.context.pattern = this.pattern;
     if (this.agent.hasLLM) {
       this.runStreaming(cmdName);
     } else {
       this.runNonStreaming(cmdName);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // User Messages
-  // ---------------------------------------------------------------------------
 
   private processUserMessage(msg: string): void {
     if (this.streaming) {
@@ -490,7 +494,6 @@ export class StrudelTUI {
       return;
     }
 
-    this.agent.context.pattern = this.pattern;
     if (this.agent.hasLLM) {
       this.runStreaming(msg);
     } else {
@@ -498,27 +501,32 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Streaming Handler
-  // ---------------------------------------------------------------------------
-
   private runStreaming(message: string): void {
     this.streaming = true;
     this.streamingText = '';
     this.streamingError = false;
+    const controller = new AbortController();
+    this.streamAbort = controller;
     this.statusBar.update({ streaming: true });
 
     (async () => {
       try {
-        await this.agent.processUserMessageStreaming(message, (event: AgentEvent) =>
-          this.handleAgentEvent(event),
+        await this.agent.processUserMessageStreaming(
+          message,
+          (event: AgentEvent) => this.handleAgentEvent(event),
+          controller.signal,
         );
       } catch (err: unknown) {
         this.addMessage('error', (err instanceof Error ? err.message : String(err)));
       } finally {
-        this.streaming = false;
-        this.statusBar.update({ streaming: false });
-        this.flushQueue();
+        // An interrupted stream can outlive its replacement — only the
+        // stream that still owns the state may tear it down.
+        if (this.streamAbort === controller) {
+          this.streamAbort = null;
+          this.streaming = false;
+          this.statusBar.update({ streaming: false });
+          this.flushQueue();
+        }
       }
     })();
   }
@@ -559,10 +567,6 @@ export class StrudelTUI {
       case 'tool_result':
         this.updateLastToolMessage(`▸ ${event.name} → ${event.result}`);
         break;
-      case 'pattern_update':
-        this.pattern = event.pattern;
-        this.patternPanel.setPattern(this.pattern);
-        break;
       case 'done':
         if (!this.streamingError) {
           this.finalizeStreamingMessage(event.response.message || this.streamingText);
@@ -574,15 +578,17 @@ export class StrudelTUI {
         break;
       case 'error':
         this.streamingError = true;
+        // Keep whatever text already streamed in — otherwise the message is
+        // left as a dangling "▌" placeholder.
+        if (this.streamingText) {
+          this.messageHistory.finalizeStreamingMessage(this.streamingText);
+          this.streamingText = '';
+        }
         this.addMessage('error', event.error);
         break;
     }
     this.tui.requestRender();
   }
-
-  // ---------------------------------------------------------------------------
-  // Streaming Message Management
-  // ---------------------------------------------------------------------------
 
   private updateStreamingMessage(): void {
     this.messageHistory.updateOrAddStreamingMessage(this.streamingText + '▌');
@@ -598,24 +604,20 @@ export class StrudelTUI {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Message Queue
-  // ---------------------------------------------------------------------------
-
   private flushQueue(): void {
     if (this.queuedMessages.length === 0) return;
     const next = this.queuedMessages.shift()!;
     this.processUserMessage(next);
   }
 
-  // ---------------------------------------------------------------------------
-  // Audio Control
-  // ---------------------------------------------------------------------------
-
   private async handlePlay(): Promise<void> {
     try {
-      this.addMessage('system', 'Starting audio engine...');
-      await this.audio.play(this.pattern);
+      const result = await this.audio.play(this.pattern);
+      if (result === 'awaiting-browser') {
+        this.addMessage('system', 'Opened a browser tab for audio — click "Enable audio" there. Your pattern starts automatically.');
+        this.tui.requestRender();
+        return;
+      }
       this.playing = true;
       this.statusBar.update({ playing: true });
       this.patternPanel.setPlaying(true);
@@ -647,18 +649,14 @@ export class StrudelTUI {
   }
 
   private async handleSave(): Promise<void> {
-    const filename = 'untitled.strudel';
     try {
-      await writeFile(filename, this.pattern, 'utf-8');
-      this.addMessage('system', `Saved to ${filename}`);
+      const loader = new PatternLoader();
+      await loader.savePattern('untitled', this.pattern);
+      this.addMessage('system', `Saved to ${join(loader.userPatternDir, 'untitled.strudel')}`);
     } catch (err: unknown) {
       this.addMessage('error', `Save error: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Config Panel
-  // ---------------------------------------------------------------------------
 
   private openConfigPanel(mode: ConfigPanelMode): void {
     if (!mode) return;
@@ -679,9 +677,16 @@ export class StrudelTUI {
     this.configPanel = null;
 
     if (saved) {
-      this.agent.context.pattern = this.pattern;
-      this.statusBar.update({ model: new ConfigManager().get('model') });
-      this.addMessage('system', '◆ Configuration saved · AI agent reloaded');
+      this.agent.reloadConfig();
+      const configured = this.agent.hasLLM;
+      this.statusBar.update({
+        mode: configured ? 'llm' : 'keyword',
+        model: configured ? new ConfigManager().get('model') : undefined,
+      });
+      this.addMessage(
+        'system',
+        configured ? '◆ Configuration saved · AI agent ready' : 'Configuration saved',
+      );
     } else {
       this.addMessage('system', 'Configuration cancelled');
     }
@@ -689,30 +694,25 @@ export class StrudelTUI {
     this.tui.requestRender();
   }
 
-  // ---------------------------------------------------------------------------
-  // Slash Menu Updates
-  // ---------------------------------------------------------------------------
-
   private updateSlashMenu(): void {
     this.slashMenu.setFilter(this.inputField.getValue());
   }
-
-  // ---------------------------------------------------------------------------
-  // Message Helper
-  // ---------------------------------------------------------------------------
 
   private addMessage(type: MessageType, content: string): void {
     this.messageHistory.addMessage({ type, content });
     this.tui.requestRender();
   }
 
-  // ---------------------------------------------------------------------------
-  // Debug Logging
-  // ---------------------------------------------------------------------------
-
   private log(...args: unknown[]): void {
     if (this.debug) {
-      console.error('[StrudelTUI]', ...args);
+      this.addMessage('system', `[debug] ${args.map(String).join(' ')}`);
     }
   }
+}
+
+function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  return Promise.race([
+    promise,
+    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  ]);
 }

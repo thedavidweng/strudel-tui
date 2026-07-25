@@ -1,8 +1,3 @@
-/**
- * Help text constants for the Strudel-TUI agent.
- * Commands, keyboard shortcuts, and example patterns.
- */
-
 export interface CommandInfo {
   command: string;
   description: string;
@@ -19,10 +14,6 @@ export interface ExamplePattern {
   code: string;
   description: string;
 }
-
-// ---------------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------------
 
 export const COMMANDS: CommandInfo[] = [
   {
@@ -48,6 +39,15 @@ export const COMMANDS: CommandInfo[] = [
     description: 'Validate the current pattern for syntax errors',
   },
   {
+    command: 'list / patterns',
+    description: 'List built-in and saved patterns',
+  },
+  {
+    command: 'load / open <name>',
+    description: 'Load a pattern by name',
+    example: 'load acid',
+  },
+  {
     command: 'undo',
     description: 'Revert to the previous pattern',
   },
@@ -61,21 +61,14 @@ export const COMMANDS: CommandInfo[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Keyboard shortcuts
-// ---------------------------------------------------------------------------
-
 export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+P', description: 'Toggle play/stop' },
+  { keys: 'Ctrl+E', description: 'Edit pattern in place (Ctrl+X save, Ctrl+E/Esc discard)' },
   { keys: 'Ctrl+S', description: 'Save current pattern to file' },
   { keys: 'Ctrl+L', description: 'Clear message history' },
-  { keys: 'Ctrl+C', description: 'Quit strudel-tui' },
+  { keys: 'Ctrl+C', description: 'Quit strudel-tui (press twice)' },
   { keys: 'Up/Down', description: 'Scroll through input history' },
 ];
-
-// ---------------------------------------------------------------------------
-// Example patterns
-// ---------------------------------------------------------------------------
 
 export const EXAMPLES: ExamplePattern[] = [
   {
@@ -110,13 +103,6 @@ export const EXAMPLES: ExamplePattern[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Help formatter
-// ---------------------------------------------------------------------------
-
-/**
- * Format all help information into a single display string.
- */
 export function formatHelp(): string {
   const lines: string[] = [];
 

@@ -1,14 +1,12 @@
-import { SessionHistory } from './SessionHistory.js';
+import { PatternOwner } from '../pattern/PatternOwner.js';
+import { ChatLog } from '../session/ChatLog.js';
+import { SessionStore, type SessionData } from '../session/SessionStore.js';
 import { ToolExecutor } from './ToolExecutor.js';
 import { KeywordAdapter } from './KeywordAdapter.js';
 import { LLMAdapter } from './LLMAdapter.js';
-import type { StrudelConfig } from '../config/ConfigManager.js';
 import { ConfigManager } from '../config/ConfigManager.js';
+import type { StrudelConfig } from '../config/ConfigManager.js';
 import type { AudioControl } from './ToolExecutor.js';
-
-// ---------------------------------------------------------------------------
-// Types (re-exported for backward compat)
-// ---------------------------------------------------------------------------
 
 export interface AgentResponse {
   action: string;
@@ -21,43 +19,27 @@ export type AgentEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'tool_call'; name: string; args: Record<string, any> }
   | { type: 'tool_result'; name: string; result: string }
-  | { type: 'pattern_update'; pattern: string }
   | { type: 'done'; response: AgentResponse }
   | { type: 'error'; error: string };
 
 export type AgentEventHandler = (event: AgentEvent) => void;
 
-export interface AgentContext {
-  pattern: string;
-  history: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Agent — thin orchestrator
-// ---------------------------------------------------------------------------
-
 export class Agent {
-  context: AgentContext;
+  private _patterns: PatternOwner;
+  private _chat: ChatLog;
   private _executor: ToolExecutor;
-  private _history: SessionHistory;
   private _keyword: KeywordAdapter;
   private _llm: LLMAdapter | null;
 
   constructor(initialPattern = '', sessionId?: string, configOverrides?: Partial<StrudelConfig>, audio?: AudioControl) {
-    this.context = { pattern: initialPattern, history: [] };
-    this._history = new SessionHistory(sessionId);
+    this._patterns = new PatternOwner(initialPattern);
+    this._chat = new ChatLog(sessionId);
+    this._executor = new ToolExecutor(this._patterns, audio);
+    this._keyword = new KeywordAdapter(this._executor, this._patterns);
 
-    if (initialPattern) {
-      this._history.pushPattern(initialPattern);
-    }
-
-    this._executor = new ToolExecutor(initialPattern, this._history, audio);
-    this._keyword = new KeywordAdapter(this._executor);
-
-    // Initialize LLM if config is available
     const config = new ConfigManager(configOverrides);
     if (config.isConfigured()) {
-      this._llm = new LLMAdapter(this._executor, config.getAll() as StrudelConfig & { apiKey: string });
+      this._llm = new LLMAdapter(this._executor, this._patterns, config.getAll() as StrudelConfig & { apiKey: string });
     } else {
       this._llm = null;
     }
@@ -67,87 +49,74 @@ export class Agent {
     return this._llm !== null;
   }
 
-  get sessionHistory(): SessionHistory {
-    return this._history;
+  /**
+   * Re-reads config from disk and rebuilds the LLM adapter. Called after the
+   * in-app config panel saves, so a newly entered API key takes effect
+   * without restarting. Pattern state and chat log are preserved.
+   */
+  reloadConfig(): void {
+    const config = new ConfigManager();
+    if (config.isConfigured()) {
+      this._llm = new LLMAdapter(this._executor, this._patterns, config.getAll() as StrudelConfig & { apiKey: string });
+    } else {
+      this._llm = null;
+    }
   }
 
-  // -------------------------------------------------------------------------
-  // Main entry: streaming mode
-  // -------------------------------------------------------------------------
+  get currentPattern(): string {
+    return this._patterns.currentPattern;
+  }
+
+  setPattern(pattern: string): void {
+    this._patterns.set(pattern);
+  }
 
   async processUserMessageStreaming(
     message: string,
     onEvent: AgentEventHandler,
     signal?: AbortSignal,
   ): Promise<void> {
-    this._history.addMessage('user', message);
-    this.context.history.push(message);
-    this._syncPatternFromExecutor();
+    this._chat.addMessage('user', message);
 
     if (!this._llm) {
       const response = await this._keyword.processMessage(message);
-      this._syncPatternFromExecutor();
-      this._history.addMessage('agent', response.message);
-      this._history.save().catch(() => {});
+      this._chat.addMessage('agent', response.message);
+      await this._saveSession();
       onEvent({ type: 'done', response });
       return;
     }
 
-    // LLM mode
-    const currentPattern = this.context.pattern;
-    await this._llm.processMessageStreaming(message, currentPattern, onEvent, signal);
-    this._syncPatternFromExecutor();
+    await this._llm.processMessageStreaming(message, this._patterns.currentPattern, onEvent, signal);
+    await this._saveSession();
   }
 
-  // -------------------------------------------------------------------------
-  // Legacy entry: non-streaming
-  // -------------------------------------------------------------------------
-
   async processUserMessage(message: string): Promise<AgentResponse> {
-    this._history.addMessage('user', message);
-    this.context.history.push(message);
-    this._syncPatternFromExecutor();
-
-    if (this._llm) {
-      let fullText = '';
-      let lastResponse: AgentResponse = { action: 'llm', message: '' };
-
-      await this.processUserMessageStreaming(message, (event) => {
-        if (event.type === 'text_delta') fullText += event.delta;
-        if (event.type === 'done') lastResponse = event.response;
-      });
-
-      return { ...lastResponse, message: fullText || lastResponse.message };
-    }
+    this._chat.addMessage('user', message);
 
     const response = await this._keyword.processMessage(message);
-    this._syncPatternFromExecutor();
-    this._history.addMessage('agent', response.message);
-    this._history.save().catch(() => {});
+    this._chat.addMessage('agent', response.message);
+    await this._saveSession();
     return response;
   }
 
-  // -------------------------------------------------------------------------
-  // Direct undo/redo (bypasses LLM)
-  // -------------------------------------------------------------------------
-
   undo(): string | undefined {
-    const restored = this._executor.undoPattern();
-    this._syncPatternFromExecutor();
-    return restored;
+    return this._patterns.undo();
   }
 
   redo(): string | undefined {
-    const restored = this._executor.redoPattern();
-    this._syncPatternFromExecutor();
-    return restored;
+    return this._patterns.redo();
   }
 
-  // -------------------------------------------------------------------------
-  // Sync pattern from executor to context (backward compat)
-  // -------------------------------------------------------------------------
-
-  private _syncPatternFromExecutor(): void {
-    this.context.pattern = this._executor.currentPattern;
+  private async _saveSession(): Promise<void> {
+    const { stack, index } = this._patterns.exportStack();
+    const data: SessionData = {
+      id: this._chat.sessionId,
+      messages: this._chat.exportMessages(),
+      patternStack: stack,
+      currentIndex: index,
+      createdAt: this._chat.createdAt,
+      updatedAt: Date.now(),
+    };
+    await SessionStore.save(data).catch(() => {});
   }
 }

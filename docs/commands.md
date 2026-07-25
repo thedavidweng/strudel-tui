@@ -66,7 +66,7 @@ strudel-tui config show
 Output:
 ```
 Strudel-TUI Configuration:
-  apiKey:      ****abcd
+  apiKey:      (set)
   baseUrl:     https://api.openai.com/v1
   model:       gpt-4o
   temperature: 0.7
@@ -98,6 +98,9 @@ Type these in the input box while the TUI is running.
 | `modify <instruction>` | Same as `edit` |
 | `validate` | Check the current pattern for syntax errors |
 | `check` | Same as `validate` |
+| `list` / `patterns` | List built-in and saved patterns |
+| `load <name>` | Load a pattern by name (e.g. `load acid`) |
+| `open <name>` | Same as `load` |
 | `undo` | Revert to the previous pattern |
 | `redo` | Re-apply the last undone pattern change |
 
@@ -152,9 +155,10 @@ These keyword-based edits work in both keyword mode and as quick edits in AI mod
 | Keys | Description |
 |------|-------------|
 | `Ctrl+P` | Toggle play/stop |
-| `Ctrl+S` | Save current pattern to file |
+| `Ctrl+E` | Edit the pattern in place (`Ctrl+X` save, `Ctrl+E`/`Esc` discard) |
+| `Ctrl+S` | Save current pattern to `~/.strudel-tui/patterns/untitled.strudel` |
 | `Ctrl+L` | Clear message history |
-| `Ctrl+C` | Quit strudel-tui |
+| `Ctrl+C` | Quit strudel-tui (press twice; single press clears input or interrupts a streaming reply) |
 | `Up` | Previous input from history |
 | `Down` | Next input from history |
 | `Enter` | Send input |

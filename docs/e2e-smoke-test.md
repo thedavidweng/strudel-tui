@@ -18,7 +18,8 @@ Manual end-to-end tests for strudel-tui. Run these before releases or after majo
 | 1.2 | `./bin/strudel-tui --bpm 140` | Status bar shows BPM 140 |
 | 1.3 | `./bin/strudel-tui --debug` | Debug indicators visible |
 | 1.4 | Resize terminal window | Layout adapts, no crashes |
-| 1.5 | Press `Ctrl+C` once | If playing, stops. If idle, exits |
+| 1.5 | Press `Ctrl+C` once | Shows "Press ctrl+c again to exit" (or clears input / interrupts streaming) |
+| 1.6 | Press `Ctrl+C` twice quickly | Exits; terminal restored to the normal screen, prompt intact |
 
 ### 2. Pattern Editor
 
@@ -28,12 +29,14 @@ Manual end-to-end tests for strudel-tui. Run these before releases or after majo
 | 2.2 | Verify syntax highlighting | Strings green, functions cyan, numbers yellow |
 | 2.3 | Enter multi-line pattern | Line numbers display correctly |
 | 2.4 | Enter invalid syntax | Error message in chat |
+| 2.5 | Press `Ctrl+E`, edit a line, press `Ctrl+X` | Panel shows "editing" while active; edit is kept and the next agent command sees it |
+| 2.6 | Press `Ctrl+E`, edit, press `Esc` | Edit discarded, original pattern restored |
 
 ### 3. Playback
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 3.1 | Type `/play` or press `Ctrl+P` | Audio starts, status shows PLAYING |
+| 3.1 | Type `/play` or press `Ctrl+P` | Browser tab opens; after clicking "Enable audio" once, audio starts and status shows PLAYING |
 | 3.2 | Press `Ctrl+P` again | Audio stops, status shows STOPPED |
 | 3.3 | Type `/stop` | Audio stops |
 | 3.4 | Type `play` (natural language) | Keyword adapter triggers playback |

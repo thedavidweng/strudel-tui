@@ -48,12 +48,15 @@ jobs:
 
       - name: Import test (source-level)
         run: |
-          # Verify all source modules import without error
+          # Verify all source modules import without error (entrypoint excluded: it runs the CLI)
           bun -e "
-            import('./src/config/ConfigManager.js').then(() => console.log('ConfigManager OK'));
-            import('./src/engine/PatternLoader.js').then(() => console.log('PatternLoader OK'));
-            import('./src/llm/tools.js').then(() => console.log('tools OK'));
-            import('./src/tui/theme.js').then(() => console.log('theme OK'));
-            import('./src/agent/DiffGenerator.js').then(() => console.log('DiffGenerator OK'));
-            import('./src/agent/HelpText.js').then(() => console.log('HelpText OK'));
+            const glob = new Bun.Glob('src/**/*.ts');
+            let n = 0;
+            for await (const f of glob.scan('.')) {
+              if (f.endsWith('.d.ts') || f === 'src/index.ts') continue;
+              await import('./' + f);
+              n++;
+            }
+            if (n === 0) throw new Error('no modules found');
+            console.log(n + ' modules imported OK');
           "
