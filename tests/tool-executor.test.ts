@@ -5,7 +5,7 @@ import { PatternOwner } from '../src/pattern/PatternOwner';
 function createMockAudio(): AudioControl & { calls: { play: string[]; stop: number } } {
   return {
     calls: { play: [], stop: 0 },
-    async play(code: string) { this.calls.play.push(code); },
+    async play(code: string) { this.calls.play.push(code); return 'playing' as const; },
     async stop() { this.calls.stop++; },
   };
 }
@@ -68,7 +68,7 @@ describe('ToolExecutor', () => {
     test('play_pattern without code reports current pattern', async () => {
       patterns.set('s("bd")');
       const result = await executor.executeTool('play_pattern', {});
-      expect(result).toContain('Playing current pattern');
+      expect(result).toContain('Playing: s("bd")');
     });
 
     test('stop_playback returns stopped message', async () => {

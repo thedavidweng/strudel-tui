@@ -56,7 +56,7 @@ export class LLMAdapter {
           this._chat.addAssistant(outcome.text);
         }
         if (outcome.errored) return;
-        if (!outcome.ranTools) break;
+        if (!outcome.ranTools || signal?.aborted) break;
       }
 
       const response: AgentResponse = {
@@ -66,6 +66,11 @@ export class LLMAdapter {
       };
       onEvent({ type: 'done', response });
     } catch (err: unknown) {
+      if (signal?.aborted) {
+        // User interrupt, not a failure — the UI already reported it.
+        onEvent({ type: 'done', response: { action: 'interrupted', message: combinedText } });
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       const errorMsg = `LLM error: ${msg}`;
       onEvent({ type: 'error', error: errorMsg });

@@ -4,7 +4,7 @@ import { PatternLoader } from '../engine/PatternLoader.js';
 import { PatternOwner } from '../pattern/PatternOwner.js';
 
 export interface AudioControl {
-  play(code: string): Promise<void>;
+  play(code: string): Promise<'playing' | 'awaiting-browser'>;
   stop(): Promise<void>;
 }
 
@@ -32,19 +32,12 @@ export class ToolExecutor {
             return `Invalid pattern: ${validation.errors?.map(e => e.message).join('; ')}`;
           }
           this._patterns.set(args.code);
-          if (this._audio) {
-            try { await this._audio.play(args.code); } catch (err: unknown) {
-              console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
-            }
-          }
-          return `Pattern set. Ready to play: ${args.code}`;
+          return `Pattern set. ${await this._startPlayback(args.code)}`;
         }
-        if (this._audio && this._patterns.currentPattern.trim()) {
-          try { await this._audio.play(this._patterns.currentPattern); } catch (err: unknown) {
-            console.warn('[ToolExecutor] audio.play failed:', err instanceof Error ? err.message : err);
-          }
+        if (!this._patterns.currentPattern.trim()) {
+          return 'No pattern to play.';
         }
-        return `Playing current pattern: ${this._patterns.currentPattern}`;
+        return await this._startPlayback(this._patterns.currentPattern);
       }
 
       case 'stop_playback':
@@ -136,6 +129,18 @@ export class ToolExecutor {
 
       default:
         return `Unknown tool: ${name}`;
+    }
+  }
+
+  private async _startPlayback(code: string): Promise<string> {
+    if (!this._audio) return `Playing: ${code}`;
+    try {
+      const result = await this._audio.play(code);
+      return result === 'awaiting-browser'
+        ? 'A browser tab has been opened for audio — playback starts once the user clicks "Enable audio" there.'
+        : `Playing: ${code}`;
+    } catch (err: unknown) {
+      return `Audio playback failed: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 }

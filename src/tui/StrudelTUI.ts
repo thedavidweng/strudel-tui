@@ -75,6 +75,7 @@ export class StrudelTUI {
   private altScreenActive = false;
   private stopped = false;
   private savedConsole: Pick<Console, 'log' | 'warn' | 'error'> | null = null;
+  private streamAbort: AbortController | null = null;
 
   constructor(options: StrudelTUIOptions) {
     this.pattern = options.initialPattern ?? DEFAULT_PATTERN;
@@ -82,7 +83,12 @@ export class StrudelTUI {
     this.debug = options.debug;
 
     this.configManager = new ConfigManager(options.configOverrides);
-    this.audio = new AudioController();
+    this.audio = new AudioController((playing) => {
+      this.playing = playing;
+      this.statusBar.update({ playing });
+      this.patternPanel.setPlaying(playing);
+      this.tui.requestRender();
+    });
     this.agent = new Agent(this.pattern, undefined, options.configOverrides, this.audio);
 
     this.terminal = new ProcessTerminal();
@@ -234,7 +240,13 @@ export class StrudelTUI {
 
     if (matchesKey(data, Key.ctrl('c'))) {
       if (this.streaming) {
+        this.streamAbort?.abort();
         this.streaming = false;
+        this.streamingError = true;
+        if (this.streamingText) {
+          this.messageHistory.finalizeStreamingMessage(this.streamingText);
+          this.streamingText = '';
+        }
         this.addMessage('system', 'Interrupted');
         this.statusBar.update({ streaming: false });
         this.tui.requestRender();
@@ -454,19 +466,28 @@ export class StrudelTUI {
     this.streaming = true;
     this.streamingText = '';
     this.streamingError = false;
+    const controller = new AbortController();
+    this.streamAbort = controller;
     this.statusBar.update({ streaming: true });
 
     (async () => {
       try {
-        await this.agent.processUserMessageStreaming(message, (event: AgentEvent) =>
-          this.handleAgentEvent(event),
+        await this.agent.processUserMessageStreaming(
+          message,
+          (event: AgentEvent) => this.handleAgentEvent(event),
+          controller.signal,
         );
       } catch (err: unknown) {
         this.addMessage('error', (err instanceof Error ? err.message : String(err)));
       } finally {
-        this.streaming = false;
-        this.statusBar.update({ streaming: false });
-        this.flushQueue();
+        // An interrupted stream can outlive its replacement — only the
+        // stream that still owns the state may tear it down.
+        if (this.streamAbort === controller) {
+          this.streamAbort = null;
+          this.streaming = false;
+          this.statusBar.update({ streaming: false });
+          this.flushQueue();
+        }
       }
     })();
   }
@@ -552,8 +573,12 @@ export class StrudelTUI {
 
   private async handlePlay(): Promise<void> {
     try {
-      this.addMessage('system', 'Starting audio engine...');
-      await this.audio.play(this.pattern);
+      const result = await this.audio.play(this.pattern);
+      if (result === 'awaiting-browser') {
+        this.addMessage('system', 'Opened a browser tab for audio — click "Enable audio" there. Your pattern starts automatically.');
+        this.tui.requestRender();
+        return;
+      }
       this.playing = true;
       this.statusBar.update({ playing: true });
       this.patternPanel.setPlaying(true);

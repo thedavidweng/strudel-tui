@@ -104,10 +104,17 @@ export class InlineConfig implements Component {
       case 'confirm':
         return this._handleListInput(data, 2, (idx) => {
           if (idx === 0) {
-            const config = new ConfigManager();
-            config.set('apiKey', this._apiKey);
-            config.set('baseUrl', this._baseUrl);
-            config.set('model', this._model);
+            try {
+              const config = new ConfigManager();
+              config.set('apiKey', this._apiKey);
+              config.set('baseUrl', this._baseUrl);
+              config.set('model', this._model);
+            } catch (err: unknown) {
+              // A disk-permission problem must not crash the TUI.
+              console.warn(`Could not save configuration: ${err instanceof Error ? err.message : String(err)}`);
+              this._onClose(false);
+              return;
+            }
             this._onClose(true);
           } else {
             this._onClose(false);
@@ -262,9 +269,15 @@ export class InlineConfig implements Component {
     this._model = preset.model;
 
     if (this._mode === 'provider') {
-      const config = new ConfigManager();
-      config.set('baseUrl', preset.baseUrl);
-      config.set('model', preset.model);
+      try {
+        const config = new ConfigManager();
+        config.set('baseUrl', preset.baseUrl);
+        config.set('model', preset.model);
+      } catch (err: unknown) {
+        console.warn(`Could not save configuration: ${err instanceof Error ? err.message : String(err)}`);
+        this._onClose(false);
+        return;
+      }
       this._onClose(true);
       return;
     }

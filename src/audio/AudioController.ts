@@ -1,6 +1,20 @@
+import { BrowserBridge } from './BrowserBridge.js';
+
+/**
+ * Playback outcome: 'playing' means sound is (or is about to be) running;
+ * 'awaiting-browser' means a browser tab was opened and the pattern will
+ * start as soon as the user clicks "Enable audio" there.
+ */
+export type PlayResult = 'playing' | 'awaiting-browser';
+
+type Backend =
+  | { kind: 'webview'; view: any }
+  | { kind: 'browser'; bridge: BrowserBridge }
+  | { kind: 'console' };
+
 type ControllerState =
   | { tag: 'idle' }
-  | { tag: 'ready'; view: any; usingFallback: boolean }
+  | { tag: 'ready'; backend: Backend }
   | { tag: 'error'; message: string };
 
 const ENGINE_HTML = `<!DOCTYPE html>
@@ -48,6 +62,17 @@ export class AudioController {
   private _state: ControllerState = { tag: 'idle' };
   private _isPlaying = false;
   private _initPromise: Promise<void> | null = null;
+  private _browserOpened = false;
+  private readonly _onPlaybackChange: ((playing: boolean) => void) | null;
+
+  /**
+   * @param onPlaybackChange invoked when playback starts or stops outside a
+   * direct play()/stop() call — e.g. the browser tab starts a queued pattern
+   * after the user's enable click, or the tab is closed mid-playback.
+   */
+  constructor(onPlaybackChange?: (playing: boolean) => void) {
+    this._onPlaybackChange = onPlaybackChange ?? null;
+  }
 
   async start(): Promise<void> {
     if (this._state.tag === 'ready') return;
@@ -64,26 +89,54 @@ export class AudioController {
   }
 
   private async _doStart(): Promise<void> {
+    // Hidden WebView is the ideal backend, but no released Bun exposes one
+    // yet — the check is here so it lights up if that changes.
     if (typeof (globalThis as any).Bun !== 'undefined' && (globalThis as any).Bun.WebView) {
       try {
         await this._startWebView();
         return;
       } catch (err: unknown) {
         console.warn(
-          `[AudioController] WebView initialisation failed (${err instanceof Error ? err.message : err}), falling back to console mode.`,
+          `[AudioController] WebView initialisation failed (${err instanceof Error ? err.message : err}), trying browser bridge.`,
         );
       }
     }
 
+    try {
+      const bridge = new BrowserBridge((status) => {
+        switch (status.type) {
+          case 'ready':
+            console.log('[audio] Browser audio ready');
+            break;
+          case 'playing':
+            this._isPlaying = true;
+            this._onPlaybackChange?.(true);
+            break;
+          case 'error':
+            console.warn(`[audio] Browser playback error: ${status.error}`);
+            break;
+          case 'disconnected':
+            this._isPlaying = false;
+            this._browserOpened = false;
+            this._onPlaybackChange?.(false);
+            console.warn('[audio] Browser audio tab closed — playing again will reopen it');
+            break;
+        }
+      });
+      bridge.start();
+      this._state = { tag: 'ready', backend: { kind: 'browser', bridge } };
+      return;
+    } catch (err: unknown) {
+      console.warn(
+        `[AudioController] Browser bridge failed to start (${err instanceof Error ? err.message : err}), falling back to console mode.`,
+      );
+    }
+
     console.warn(
-      '[AudioController] Bun.WebView not available -- using console fallback. ' +
+      '[AudioController] No audio backend available -- using console fallback. ' +
         'Audio playback is simulated (patterns are logged to the console).',
     );
-    this._state = {
-      tag: 'ready',
-      view: null,
-      usingFallback: true,
-    };
+    this._state = { tag: 'ready', backend: { kind: 'console' } };
   }
 
   private async _startWebView(): Promise<void> {
@@ -108,11 +161,7 @@ export class AudioController {
       throw new Error(`Strudel engine init error: ${initError}`);
     }
 
-    this._state = {
-      tag: 'ready',
-      view,
-      usingFallback: false,
-    };
+    this._state = { tag: 'ready', backend: { kind: 'webview', view } };
   }
 
   private async _waitForReady(view: any, timeoutMs: number): Promise<boolean> {
@@ -131,7 +180,7 @@ export class AudioController {
     return false;
   }
 
-  async play(code: string): Promise<void> {
+  async play(code: string): Promise<PlayResult> {
     await this.start();
 
     const state = this._state;
@@ -139,27 +188,48 @@ export class AudioController {
       throw new Error(`AudioController is not ready (state: ${state.tag})`);
     }
 
-    if (state.usingFallback) {
-      console.log(`[AudioController] Playing pattern:\n${code}`);
-      this._isPlaying = true;
-      return;
-    }
+    switch (state.backend.kind) {
+      case 'console':
+        console.log(`[AudioController] Playing pattern (simulated):\n${code}`);
+        this._isPlaying = true;
+        return 'playing';
 
-    try {
-      const result = await state.view.evaluate(
-        `window.evaluatePattern(${JSON.stringify(code)})`,
-      );
-
-      if (result && result.ok === false) {
-        throw new Error(result.error || 'Unknown evaluation error');
+      case 'browser': {
+        const bridge = state.backend.bridge;
+        const sent = bridge.play(code);
+        if (sent) {
+          this._isPlaying = true;
+          return 'playing';
+        }
+        // Queued: open a tab once and wait for the user's enable click.
+        // _browserOpened resets when a connected tab drops, so a closed tab
+        // is reopened on the next play without ever stacking duplicates.
+        if (!bridge.hasClient && !this._browserOpened) {
+          bridge.openBrowser();
+          this._browserOpened = true;
+        }
+        return 'awaiting-browser';
       }
 
-      this._isPlaying = true;
-    } catch (err: unknown) {
-      if (this._isWebViewGone(err)) {
-        this._resetToError('WebView crashed or was closed');
+      case 'webview': {
+        try {
+          const result = await state.backend.view.evaluate(
+            `window.evaluatePattern(${JSON.stringify(code)})`,
+          );
+
+          if (result && result.ok === false) {
+            throw new Error(result.error || 'Unknown evaluation error');
+          }
+
+          this._isPlaying = true;
+          return 'playing';
+        } catch (err: unknown) {
+          if (this._isWebViewGone(err)) {
+            this._resetToError('WebView crashed or was closed');
+          }
+          throw new Error(`Pattern evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
-      throw new Error(`Pattern evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -167,41 +237,58 @@ export class AudioController {
     const state = this._state;
     if (state.tag !== 'ready') return;
 
-    if (state.usingFallback) {
-      console.log('[AudioController] Playback stopped');
-      this._isPlaying = false;
-      return;
-    }
+    switch (state.backend.kind) {
+      case 'console':
+        console.log('[AudioController] Playback stopped');
+        this._isPlaying = false;
+        return;
 
-    try {
-      const result = await state.view.evaluate('window.stopPlayback()');
-      if (result && result.ok === false) {
-        console.warn('[AudioController] stopPlayback returned error:', result.error);
+      case 'browser':
+        state.backend.bridge.stop();
+        this._isPlaying = false;
+        return;
+
+      case 'webview': {
+        try {
+          const result = await state.backend.view.evaluate('window.stopPlayback()');
+          if (result && result.ok === false) {
+            console.warn('[AudioController] stopPlayback returned error:', result.error);
+          }
+          this._isPlaying = false;
+        } catch (err: unknown) {
+          if (this._isWebViewGone(err)) {
+            this._resetToError('WebView crashed or was closed');
+          } else {
+            console.warn('[AudioController] Error stopping playback:', err instanceof Error ? err.message : err);
+          }
+          this._isPlaying = false;
+        }
+        return;
       }
-      this._isPlaying = false;
-    } catch (err: unknown) {
-      if (this._isWebViewGone(err)) {
-        this._resetToError('WebView crashed or was closed');
-      } else {
-        console.warn('[AudioController] Error stopping playback:', err instanceof Error ? err.message : err);
-      }
-      this._isPlaying = false;
     }
   }
 
   async shutdown(): Promise<void> {
     const state = this._state;
 
-    if (state.tag === 'ready' && state.view) {
-      try {
-        state.view.close();
-      } catch {
-        // Already closed
+    if (state.tag === 'ready') {
+      switch (state.backend.kind) {
+        case 'browser':
+          state.backend.bridge.shutdown();
+          break;
+        case 'webview':
+          try {
+            state.backend.view.close();
+          } catch {
+            // Already closed
+          }
+          break;
       }
     }
 
     this._state = { tag: 'idle' };
     this._isPlaying = false;
+    this._browserOpened = false;
   }
 
   private _isWebViewGone(err: unknown): boolean {
