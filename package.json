@@ -16,7 +16,7 @@
     "build": "bun build src/index.ts --compile --outfile bin/strudel-tui"
   },
   "dependencies": {
-    "@earendil-works/pi-tui": "^0.80.3",
+    "@earendil-works/pi-tui": "^0.84.1",
     "@strudel/core": "^1.2.6",
     "@strudel/mini": "^1.2.6",
     "@strudel/transpiler": "^1.2.6",
