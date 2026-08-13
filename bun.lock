@@ -5,7 +5,7 @@
     "": {
       "name": "strudel-tui",
       "dependencies": {
-        "@earendil-works/pi-tui": "^0.80.3",
+        "@earendil-works/pi-tui": "^0.84.1",
         "@strudel/core": "^1.2.6",
         "@strudel/mini": "^1.2.6",
         "@strudel/transpiler": "^1.2.6",
@@ -24,7 +24,7 @@
     "@kabelsalat/web@0.4.1": "patches/@kabelsalat%2Fweb@0.4.1.patch",
   },
   "packages": {
-    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.80.3", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "18.0.5" } }, "sha512-2BJI6qwRQfnM0Q7seL1+SbacU/jRRjBnN7Hu3n9BjAn7/s5FaBNnvdD1qBQYRsFTHfjqMaDsjYqanPyqwXj99w=="],
+    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.84.1", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "18.0.5" } }, "sha512-udeXFbgEhJ6JiB0uguwNVNkDy2FENfmtQwPcY+/iJ8GWeq18wkal1tKqa5YyeH0IqtX1vG0cGh8zfSYzyzVuLA=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 
