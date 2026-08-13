@@ -1,0 +1,41 @@
+name: Dependabot Auto-format
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fmt:
+    name: Auto-update lockfile
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Refresh bun.lock
+        run: bun install
+
+      - name: Commit lockfile changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bun.lock package.json
+          if git diff --cached --quiet; then
+            echo "No lockfile changes needed"
+          else
+            git commit -m "chore: update bun.lock for Dependabot"
+            git push
+          fi

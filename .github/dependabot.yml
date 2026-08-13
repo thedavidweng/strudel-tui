@@ -9,6 +9,16 @@ updates:
       - thedavidweng
     labels:
       - dependencies
+    groups:
+      npm-non-major:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: chalk
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@earendil-works/pi-tui"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -20,3 +30,6 @@ updates:
     labels:
       - dependencies
       - ci
+    ignore:
+      - dependency-name: googleapis/release-please-action
+        update-types: ["version-update:semver-major"]
