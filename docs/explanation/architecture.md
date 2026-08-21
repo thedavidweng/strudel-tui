@@ -2,7 +2,7 @@
 
 strudel-tui is organized into four layers, each with a single responsibility.
 
-Decisions: [ADR-001 — pi-tui over Ink for the TUI layer](adr-001-tui-framework.md)
+Decisions: [ADR-001 — pi-tui over Ink for the TUI layer](../adr-001-tui-framework.md)
 
 ## Layers
 

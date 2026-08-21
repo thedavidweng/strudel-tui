@@ -22,10 +22,37 @@
 - **Interactive TUI** — Terminal UI built with [pi-tui](https://github.com/earendil-works/pi) with message history, pattern editor, and status bar
 - **IME Support** — Full input method editor support for CJK and other complex scripts
 - **AI Agent** — Chat naturally to create and edit patterns. Supports any OpenAI-compatible API (OpenAI, DeepSeek, Qwen, Moonshot, OpenRouter, etc.)
-- **Audio Playback** — Patterns play through your default browser: the TUI opens a small local page running Strudel's WebAudio engine and drives it live over WebSocket. One "Enable audio" click, then every edit replaces the running pattern instantly. No Electron, no bundled browser
+- **Audio Playback** — Patterns play through your default browser: the TUI opens a small local page running Strudel's WebAudio engine and drives it live over WebSocket. One "Enable audio" click, then every `play` replaces the running pattern instantly. No Electron, no bundled browser
 - **Pattern Engine** — Validates, transpiles, and analyzes patterns using `@strudel/core` and `@strudel/transpiler`
 - **Single Binary** — Compiles to a standalone executable with `bun build --compile`
 - **Cross-Platform** — macOS (arm64/x64), Linux (arm64/x64), Windows (x64)
+
+## Documentation
+
+User guides follow the [Diátaxis](https://diataxis.fr/) structure — one page per job.
+
+**Tutorial** — start here
+
+- [Your first patterns](docs/tutorials/first-patterns.md) — make a beat, hear it, change it, save it
+
+**How-to guides** — solve a specific problem
+
+- [Connect an AI agent](docs/how-to/configure-ai-agent.md) — providers, API keys, env vars vs. config file
+- [Play audio through your browser](docs/how-to/play-audio.md) — first play, tab lifecycle, no-sound troubleshooting
+- [Manage pattern files](docs/how-to/manage-patterns.md) — list, load, save, shadow built-ins
+- [Edit a pattern](docs/how-to/edit-patterns.md) — keyword transforms, undo/redo, the in-place editor
+
+**Reference** — look something up
+
+- [CLI](docs/reference/cli.md) — flags, `config` subcommands, startup errors
+- [TUI commands and shortcuts](docs/reference/tui.md)
+- [Configuration](docs/reference/config.md) — keys, defaults, priority order
+- [Pattern files](docs/reference/pattern-files.md) — built-ins, mini-notation cheat sheet
+
+**Explanation** — understand the design
+
+- [Why audio runs in a browser tab](docs/explanation/audio-bridge.md)
+- [Architecture](docs/explanation/architecture.md)
 
 ## Getting Started
 
@@ -99,9 +126,10 @@ bun run build
 The terminal UI uses a sidebar layout:
 
 ```
+strudel-tui v0.1.0                    Send /help for all commands     ← Status bar (tips)
+STOPPED · 130 BPM · untitled · ◇ keyword · model not set — /config      ← Status bar (state)
+─────────────────────────────────────────────────────────────────────────
 ┌──────────────────────────────┬──────────────────┐
-│ STOPPED | BPM: 130 | shortcuts                  │  ← Status bar
-├──────────────────────────────┼──────────────────┤
 │                              │ > make a chill   │
 │  1 | s("bd sn").lpf(800)    │ # generate...    │
 │                              │ < note("c d e f")│
@@ -134,7 +162,7 @@ Slash-prefixed forms (`/play`, `/make …`, `/load …`) work the same and get a
 
 ### How audio works
 
-The terminal itself cannot produce sound. On first `play`, strudel-tui starts a token-gated server on `127.0.0.1` and opens a page in your browser that runs [Strudel's WebAudio engine](https://strudel.cc). Click **Enable audio** once (browsers require a user gesture); after that the TUI streams every play/stop/edit to the tab live. Close the tab and the next `play` reopens it. If no browser is available, playback falls back to logging patterns in the message history.
+The terminal itself cannot produce sound. On first `play`, strudel-tui starts a token-gated server on `127.0.0.1` and opens a page in your browser that runs [Strudel's WebAudio engine](https://strudel.cc). Click **Enable audio** once (browsers require a user gesture); after that the TUI streams every play/stop to the tab live, and each `play` swaps the running pattern in place. Close the tab and the next `play` reopens it. If no browser is available, playback falls back to logging patterns in the message history.
 
 With AI agent enabled, you can chat naturally:
 
