@@ -1,19 +1,14 @@
 version: 2
 updates:
-  - package-ecosystem: bun
-    directory: /
+  - package-ecosystem: "bun"
+    directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
-    reviewers:
-      - thedavidweng
     labels:
       - dependencies
-    groups:
-      npm-non-major:
-        update-types:
-          - "minor"
-          - "patch"
+    reviewers:
+      - thedavidweng
     ignore:
       - dependency-name: chalk
         update-types: ["version-update:semver-major"]
@@ -21,12 +16,29 @@ updates:
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+    groups:
+      npm-non-major:
+        update-types:
+          - "minor"
+          - "patch"
     cooldown:
       default-days: 7
       semver-major-days: 10
       semver-minor-days: 7
       semver-patch-days: 3
-  - package-ecosystem: github-actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    reviewers:
+      - thedavidweng
+    ignore:
+      - dependency-name: googleapis/release-please-action
+        update-types: ["version-update:semver-major"]
     groups:
       github-actions:
         patterns:
@@ -34,18 +46,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    reviewers:
-      - thedavidweng
-    labels:
-      - dependencies
-      - ci
-    ignore:
-      - dependency-name: googleapis/release-please-action
-        update-types: ["version-update:semver-major"]
     cooldown:
       default-days: 5
       semver-major-days: 7
