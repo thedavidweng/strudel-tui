@@ -21,8 +21,19 @@ updates:
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
-
+    cooldown:
+      default-days: 7
+      semver-major-days: 10
+      semver-minor-days: 7
+      semver-patch-days: 3
   - package-ecosystem: github-actions
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     directory: /
     schedule:
       interval: weekly
@@ -35,3 +46,8 @@ updates:
     ignore:
       - dependency-name: googleapis/release-please-action
         update-types: ["version-update:semver-major"]
+    cooldown:
+      default-days: 5
+      semver-major-days: 7
+      semver-minor-days: 3
+      semver-patch-days: 3
