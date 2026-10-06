@@ -77,14 +77,15 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: knip (unused exports / dependencies)
-        run: bunx knip --no-progress
+      - parallel:
+          - name: knip (unused exports / dependencies)
+            run: bunx knip --no-progress
 
-      - name: oxlint
-        run: bunx oxlint --tsconfig tsconfig.json src/ tests/
+          - name: oxlint
+            run: bunx oxlint --tsconfig tsconfig.json src/ tests/
 
-      - name: Type check
-        run: bunx tsc --noEmit
+          - name: Type check
+            run: bunx tsc --noEmit
 
   dependency-review:
     runs-on: ubuntu-latest
