@@ -20,13 +20,13 @@
     "@strudel/core": "^1.2.6",
     "@strudel/mini": "^1.2.6",
     "@strudel/transpiler": "^1.2.6",
-    "chalk": "^6.0.0",
+    "chalk": "^6.0.1",
     "citty": "^0.2.2"
   },
   "devDependencies": {
     "bun-types": "^1.4.2",
-    "knip": "^6.37.0",
-    "oxlint": "^1.83.0",
+    "knip": "^6.38.0",
+    "oxlint": "^1.85.0",
     "typescript": "7.0.2"
   },
   "engines": {
