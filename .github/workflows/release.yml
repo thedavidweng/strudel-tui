@@ -5,9 +5,7 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-  id-token: write  # Required for Sigstore keyless signing via OIDC
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
@@ -15,6 +13,9 @@ concurrency:
 
 jobs:
   goreleaser:
+    permissions:
+      contents: write
+      id-token: write  # Required for Sigstore keyless signing via OIDC
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
