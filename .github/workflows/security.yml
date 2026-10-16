@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     branches: [main]
   schedule:
     - cron: '0 6 * * 1'  # Weekly on Monday 06:00 UTC
@@ -16,6 +17,7 @@ concurrency:
 
 jobs:
   codeql:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     permissions:
       contents: read
       security-events: write
