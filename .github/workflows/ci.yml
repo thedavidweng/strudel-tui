@@ -4,17 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
     strategy:
       matrix:
@@ -70,6 +72,7 @@ jobs:
           retention-days: 7
 
   lint:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
@@ -96,7 +99,7 @@ jobs:
   dependency-review:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
