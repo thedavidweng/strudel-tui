@@ -6,17 +6,29 @@ Actions → General, enable **Allow GitHub Actions to create and approve pull
 requests**; default workflow permissions can stay read-only because the workflow
 requests its write permissions explicitly.
 
-Events produced by `GITHUB_TOKEN` do not start ordinary PR/tag workflows. Release
-Please therefore explicitly dispatches CI, smoke tests, CodeQL and workflow lint
-on the release PR's head branch. CI receives the PR's base commit for dependency
-review. The PR number shares the usual check concurrency group, so converting the
-PR to a draft cancels its checks; drafts are not dispatched. Check each run's
-head SHA against the release PR before merging it.
+GitHub creates approval-required native PR workflow runs when `GITHUB_TOKEN`
+opens or updates the release PR. A maintainer with write access must inspect the
+PR and select **Approve workflows to run** in its merge box (or approve each
+actual run with `gh api --method POST repos/thedavidweng/strudel-tui/actions/runs/RUN_ID/approve`).
+Verify those runs belong to the current release PR head and pass before merging.
+The existing PR draft, path filters and check concurrency rules remain in force.
+See [GitHub's token trigger rules](https://docs.github.com/en/actions/concepts/security/github_token).
 
-When Release Please creates the release, it dispatches `release.yml` on that tag.
-Release packages all five existing Bun targets, checksums, Sigstore signatures
-and SBOMs. For a failed packaging run, rerun that run or dispatch Release with the
-same existing tag; do not create a replacement version just to retry packaging.
+Tag pushes made with `GITHUB_TOKEN` still do not start push workflows. When
+Release Please creates the release, it explicitly dispatches `release.yml` on
+that tag. Release packages all five existing Bun targets, checksums, Sigstore
+signatures and SBOMs.
+
+For a failed packaging run, inspect that tag's release assets before retrying.
+GoReleaser's `release.mode: append` only controls release notes; it does not
+replace existing assets. If a partial upload left assets behind, list them with
+`gh release view TAG --repo thedavidweng/strudel-tui --json assets` and remove the
+assets from that failed attempt with
+`gh release delete-asset TAG ASSET_NAME --repo thedavidweng/strudel-tui --yes`
+for each exact asset name before rerunning packaging. Then rerun the failed run
+or dispatch Release with the same existing tag. Do not remove assets from a
+completed release or change the tag to retry a partial upload. See the
+[GoReleaser release options](https://goreleaser.com/customization/publish/scm/).
 
 The Homebrew tap owns cask updates: its scheduled **Sync Releases** workflow
 reads public release assets and writes its own repository with its own

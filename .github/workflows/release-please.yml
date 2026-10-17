@@ -31,30 +31,7 @@ jobs:
         with:
           token: ${{ github.token }}
 
-      # GITHUB_TOKEN-created PRs and tags do not trigger other workflows.
-      - name: Check the release PR head
-        if: ${{ steps.rp.outputs.prs_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_PRS: ${{ steps.rp.outputs.prs }}
-        run: |
-          set -euo pipefail
-          while IFS= read -r number; do
-            pr="$(gh api "repos/$GH_REPO/pulls/$number")"
-            if [ "$(jq -r .draft <<< "$pr")" = true ]; then
-              echo "Release PR #$number is a draft; checks remain skipped"
-              continue
-            fi
-            ref="$(jq -r .head.ref <<< "$pr")"
-            base="$(jq -r .base.sha <<< "$pr")"
-            echo "Dispatching checks for release PR #$number at $(jq -r .head.sha <<< "$pr")"
-            gh workflow run ci.yml --ref "$ref" -f pull_request_number="$number" -f base_sha="$base"
-            gh workflow run smoke.yml --ref "$ref" -f pull_request_number="$number"
-            gh workflow run security.yml --ref "$ref" -f pull_request_number="$number"
-            gh workflow run workflow-lint.yml --ref "$ref" -f pull_request_number="$number"
-          done < <(jq -r '.[].number' <<< "$RELEASE_PRS")
-
+      # Tags created with GITHUB_TOKEN do not trigger push workflows.
       - name: Dispatch release packaging
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         env:
