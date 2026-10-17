@@ -60,20 +60,3 @@ release:
   github:
     owner: thedavidweng
     name: strudel-tui
-
-homebrew_casks:
-  - name: strudel-tui
-    binaries:
-      - strudel-tui
-    repository:
-      owner: thedavidweng
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/thedavidweng/strudel-tui"
-    description: "Terminal-based live coding interface for Strudel with AI agent"
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/strudel-tui"]
-          end
