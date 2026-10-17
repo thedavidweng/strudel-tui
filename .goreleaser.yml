@@ -11,6 +11,10 @@ builds:
       - linux-arm64
       - linux-x64
       - windows-x64
+    hooks:
+      post:
+        - cmd: bash scripts/sign-and-notarize.sh "{{ .Os }}" "{{ .Path }}"
+          output: true
     flags:
       - --compile
 

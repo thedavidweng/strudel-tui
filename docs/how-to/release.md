@@ -35,5 +35,37 @@ reads public release assets and writes its own repository with its own
 `GITHUB_TOKEN`, as it does for Apple Say. Strudel does not push to the tap and
 needs neither `RELEASE_PLEASE_TOKEN` nor `HOMEBREW_TAP_GITHUB_TOKEN`. The first
 Strudel cask must be added after real macOS release assets and their SHA-256
-digests exist; never publish placeholder checksums. The release workflow does
-not add Apple Developer ID signing or notarization to Bun binaries.
+digests exist; never publish placeholder checksums.
+
+## macOS signing and notarization
+
+Release runs on macOS and imports the same Developer ID identity used by Apple
+Say into a temporary keychain. Configure these repository Actions secrets before
+publishing the next release:
+
+- `APPLE_CERTIFICATE_P12_BASE64`: base64-encoded Developer ID Application P12, including its private key.
+- `APPLE_CERTIFICATE_PASSWORD`: password for that P12.
+- `APPLE_API_KEY_BASE64`: base64-encoded App Store Connect API private key.
+- `APPLE_API_KEY_ID`: that API key's identifier.
+- `APPLE_API_ISSUER`: its issuer ID.
+
+The workflow pins the expected identity to `Developer ID Application: MOE AI LLC
+(NCFNX3LJ83)` and team to `NCFNX3LJ83`, matching Apple Say. The API key must belong
+to that team and permit notarization. Keep credential values in Secrets; never
+commit them or copy another repository's secrets into logs. Missing credentials
+stop packaging. Cleanup always deletes the temporary keychain and decoded files.
+
+GoReleaser's post-build hook signs both Darwin binaries with a timestamp, hardened
+runtime and [Bun's documented JIT entitlements](https://bun.com/docs/bundler/executables#code-signing-on-macos).
+Each signed binary is submitted in a ZIP to `notarytool`, and must receive
+`Accepted`. Standalone executables cannot be stapled; the hook then runs
+`codesign --verify -R=notarized --check-notarization`, the same online check used
+by Homebrew. See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+Only afterward do the original five archives, SHA-256 checksums, Sigstore
+signature and SBOMs get produced. Linux and Windows retain their existing path.
+
+Version 0.2.0 was published before this gate and has invalid macOS signatures.
+Keep its completed assets unchanged; publish the signed/notarized fix as a new
+release, then validate both downloaded macOS assets and update the tap to that
+new version. An ad-hoc signature or clearing quarantine does not satisfy this
+gate.
