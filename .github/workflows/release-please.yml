@@ -16,47 +16,49 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
+      actions: write
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ github.token }}
 
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
-          skip-github-release: true
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ github.token }}
 
-      - name: Create GitHub Release
+      # GITHUB_TOKEN-created PRs and tags do not trigger other workflows.
+      - name: Check the release PR head
+        if: ${{ steps.rp.outputs.prs_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.rp.outputs.prs }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r number; do
+            pr="$(gh api "repos/$GH_REPO/pulls/$number")"
+            if [ "$(jq -r .draft <<< "$pr")" = true ]; then
+              echo "Release PR #$number is a draft; checks remain skipped"
+              continue
+            fi
+            ref="$(jq -r .head.ref <<< "$pr")"
+            base="$(jq -r .base.sha <<< "$pr")"
+            echo "Dispatching checks for release PR #$number at $(jq -r .head.sha <<< "$pr")"
+            gh workflow run ci.yml --ref "$ref" -f pull_request_number="$number" -f base_sha="$base"
+            gh workflow run smoke.yml --ref "$ref" -f pull_request_number="$number"
+            gh workflow run security.yml --ref "$ref" -f pull_request_number="$number"
+            gh workflow run workflow-lint.yml --ref "$ref" -f pull_request_number="$number"
+          done < <(jq -r '.[].number' <<< "$RELEASE_PRS")
+
+      - name: Dispatch release packaging
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          TAG: ${{ steps.rp.outputs.tag_name }}
-        run: |
-          set -e
-          VERSION="${TAG#v}"
-          ESCAPED_VERSION=$(printf '%s' "${VERSION}" | sed 's/\./\\./g')
-          NOTES=''
-          if [ -f CHANGELOG.md ]; then
-            NOTES=$(awk "/^## \[${ESCAPED_VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md || true)
-          fi
-          INSTALL=$(cat <<'EOF'
-          # Installation
-
-          ```bash
-          # Homebrew (macOS)
-          brew install --cask thedavidweng/tap/strudel-tui
-          ```
-          EOF
-          )
-          FULL_NOTES="$(printf '%s\n\n%s' "${NOTES:-Release $TAG}" "${INSTALL}")"
-          if gh release view "$TAG" &>/dev/null; then
-            gh release edit "$TAG" --notes "${FULL_NOTES}"
-          else
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --notes "${FULL_NOTES}"
-          fi
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ steps.rp.outputs.tag_name }}
+        run: gh workflow run release.yml --ref "$TAG_NAME" -f tag_name="$TAG_NAME"

@@ -7,11 +7,17 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     branches: [main]
 
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Release PR number for shared check concurrency
+        type: string
+
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pull_request_number || github.ref }}
   cancel-in-progress: true
 
 jobs:
