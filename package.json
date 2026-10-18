@@ -24,9 +24,9 @@
     "citty": "^0.2.2"
   },
   "devDependencies": {
-    "bun-types": "^1.4.2",
-    "knip": "^6.39.0",
-    "oxlint": "^1.86.0",
+    "bun-types": "^1.4.3",
+    "knip": "^6.41.0",
+    "oxlint": "^1.87.0",
     "typescript": "7.0.2"
   },
   "engines": {
