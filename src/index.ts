@@ -1,6 +1,6 @@
 import { defineCommand, runMain } from 'citty';
 import { readFile } from 'node:fs/promises';
-import { type Component, Container, ProcessTerminal, TUI } from '@earendil-works/pi-tui';
+import { type Component, Container, ProcessTerminal, TuiMainScreen } from '@earendil-works/pi-tui';
 import { ConfigManager } from './config/ConfigManager.js';
 import type { StrudelConfig } from './config/ConfigManager.js';
 import { InlineConfig } from './tui/InlineConfig.js';
@@ -68,7 +68,7 @@ const configCmd = defineCommand({
       },
       run() {
         const terminal = new ProcessTerminal();
-        const tui = new TUI(terminal);
+        const tui = new TuiMainScreen(terminal);
         const configContainer = new Container();
         tui.addChild(configContainer);
 
