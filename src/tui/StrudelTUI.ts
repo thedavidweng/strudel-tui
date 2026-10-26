@@ -7,7 +7,8 @@ import {
   Key,
   matchesKey,
   ProcessTerminal,
-  TUI,
+  type TUI,
+  TuiMainScreen,
 } from '@earendil-works/pi-tui';
 
 import { Agent } from '../agent/Agent.js';
@@ -92,7 +93,7 @@ export class StrudelTUI {
     this.agent = new Agent(this.pattern, undefined, options.configOverrides, this.audio);
 
     this.terminal = new ProcessTerminal();
-    this.tui = new TUI(this.terminal);
+    this.tui = new TuiMainScreen(this.terminal);
 
     this.statusBar = new StatusBar({
       playing: false,
