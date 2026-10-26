@@ -8,7 +8,7 @@ import {
   matchesKey,
   ProcessTerminal,
   type TUI,
-  TuiMainScreen,
+  TuiAltScreen,
 } from '@earendil-works/pi-tui';
 
 import { Agent } from '../agent/Agent.js';
@@ -73,7 +73,6 @@ export class StrudelTUI {
   private historyIndex = -1;
   private exitArmed = 0;
   private readonly queuedMessages: string[] = [];
-  private altScreenActive = false;
   private stopped = false;
   private savedConsole: Pick<Console, 'log' | 'warn' | 'error'> | null = null;
   private streamAbort: AbortController | null = null;
@@ -93,7 +92,7 @@ export class StrudelTUI {
     this.agent = new Agent(this.pattern, undefined, options.configOverrides, this.audio);
 
     this.terminal = new ProcessTerminal();
-    this.tui = new TuiMainScreen(this.terminal);
+    this.tui = new TuiAltScreen(this.terminal);
 
     this.statusBar = new StatusBar({
       playing: false,
@@ -137,10 +136,6 @@ export class StrudelTUI {
   }
 
   start(): void {
-    // Enter the alternate screen buffer for fullscreen mode.
-    process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
-    this.altScreenActive = true;
-
     // While the TUI owns the screen, stray console output (audio fallback
     // warnings, tool errors, library noise) would corrupt the frame —
     // surface it in the message history instead.
@@ -172,7 +167,6 @@ export class StrudelTUI {
       2000,
     );
     this.tui.stop();
-    this.restoreScreen();
   }
 
   /** Synchronous best-effort terminal restore for crash paths. */
@@ -182,14 +176,6 @@ export class StrudelTUI {
       this.tui.stop();
     } catch {
       // Terminal may already be gone.
-    }
-    this.restoreScreen();
-  }
-
-  private restoreScreen(): void {
-    if (this.altScreenActive) {
-      process.stdout.write('\x1b[?1049l');
-      this.altScreenActive = false;
     }
   }
 
