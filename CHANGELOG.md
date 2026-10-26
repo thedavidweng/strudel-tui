@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2](https://github.com/thedavidweng/strudel-tui/compare/v0.2.1...v0.2.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* **tui:** use native fullscreen lifecycle with current CodeQL ([#59](https://github.com/thedavidweng/strudel-tui/issues/59)) ([2b0c7d3](https://github.com/thedavidweng/strudel-tui/commit/2b0c7d30c987ccd7a1512044e7c192dfdbcfbe47))
+
 ## [0.2.1](https://github.com/thedavidweng/strudel-tui/compare/v0.2.0...v0.2.1) (2026-10-17)
 
 
