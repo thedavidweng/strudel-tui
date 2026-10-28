@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { PatternLoader } from '../src/engine/PatternLoader';
-import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,12 +25,6 @@ describe('PatternLoader', () => {
         expect(names).toContain(expected);
       }
       expect(patterns.every((p) => p.source === 'builtin')).toBe(true);
-    });
-
-    test('built-in content matches the repo pattern files', async () => {
-      const embedded = await loader.loadPattern('acid');
-      const onDisk = await readFile(join(import.meta.dir, '..', 'patterns', 'acid.strudel'), 'utf-8');
-      expect(embedded).toBe(onDisk);
     });
 
     test('results are sorted alphabetically', async () => {

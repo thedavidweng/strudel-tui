@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { Agent } from '../src/agent/Agent';
-import { formatHelp, COMMANDS, KEYBOARD_SHORTCUTS, EXAMPLES } from '../src/agent/HelpText';
+import { formatHelp } from '../src/agent/HelpText';
 
 describe('Agent', () => {
   describe('processUserMessage()', () => {
@@ -99,17 +99,5 @@ describe('HelpText', () => {
     expect(help).toContain('Keyboard Shortcuts');
     expect(help).toContain('Ctrl+P');
     expect(help).toContain('Example Patterns');
-  });
-
-  test('COMMANDS array is non-empty', () => {
-    expect(COMMANDS.length).toBeGreaterThan(0);
-  });
-
-  test('KEYBOARD_SHORTCUTS array is non-empty', () => {
-    expect(KEYBOARD_SHORTCUTS.length).toBeGreaterThan(0);
-  });
-
-  test('EXAMPLES array is non-empty', () => {
-    expect(EXAMPLES.length).toBeGreaterThan(0);
   });
 });

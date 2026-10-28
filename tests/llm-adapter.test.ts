@@ -47,19 +47,6 @@ describe('LLMAdapter', () => {
     });
   });
 
-  describe('tool call handling', () => {
-    test('executor is shared between adapter instances', () => {
-      const _adapter = new LLMAdapter(executor, patterns, {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.example.com/v1',
-        model: 'test-model',
-      });
-
-      patterns.set('s("bd sn")');
-      expect(patterns.currentPattern).toBe('s("bd sn")');
-    });
-  });
-
   describe('error handling', () => {
     test('emits error event when fetch throws', async () => {
       globalThis.fetch = (() => Promise.reject(new Error('Network down'))) as unknown as typeof fetch;

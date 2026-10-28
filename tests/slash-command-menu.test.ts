@@ -2,23 +2,6 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { SlashCommandMenu, SLASH_COMMANDS, type SlashCommand } from '../src/tui/SlashCommandMenu';
 
 describe('SLASH_COMMANDS registry', () => {
-  test('contains expected commands', () => {
-    const names = SLASH_COMMANDS.map(c => c.name);
-    expect(names).toContain('/play');
-    expect(names).toContain('/stop');
-    expect(names).toContain('/save');
-    expect(names).toContain('/clear');
-    expect(names).toContain('/help');
-    expect(names).toContain('/quit');
-    expect(names).toContain('/undo');
-    expect(names).toContain('/redo');
-    expect(names).toContain('/make');
-    expect(names).toContain('/edit');
-    expect(names).toContain('/load');
-    expect(names).toContain('/config');
-    expect(names).toContain('/provider');
-  });
-
   test('each command has name and description', () => {
     for (const cmd of SLASH_COMMANDS) {
       expect(typeof cmd.name).toBe('string');

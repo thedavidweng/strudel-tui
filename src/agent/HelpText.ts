@@ -1,21 +1,21 @@
-export interface CommandInfo {
+interface CommandInfo {
   command: string;
   description: string;
   example?: string;
 }
 
-export interface ShortcutInfo {
+interface ShortcutInfo {
   keys: string;
   description: string;
 }
 
-export interface ExamplePattern {
+interface ExamplePattern {
   name: string;
   code: string;
   description: string;
 }
 
-export const COMMANDS: CommandInfo[] = [
+const COMMANDS: CommandInfo[] = [
   {
     command: 'play / start / go',
     description: 'Start audio playback of the current pattern',
@@ -61,7 +61,7 @@ export const COMMANDS: CommandInfo[] = [
   },
 ];
 
-export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
+const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Ctrl+P', description: 'Toggle play/stop' },
   { keys: 'Ctrl+E', description: 'Edit pattern in place (Ctrl+X save, Ctrl+E/Esc discard)' },
   { keys: 'Ctrl+S', description: 'Save current pattern to file' },
@@ -70,7 +70,7 @@ export const KEYBOARD_SHORTCUTS: ShortcutInfo[] = [
   { keys: 'Up/Down', description: 'Scroll through input history' },
 ];
 
-export const EXAMPLES: ExamplePattern[] = [
+const EXAMPLES: ExamplePattern[] = [
   {
     name: 'Basic drums',
     code: 's("bd sn hh cp")',
