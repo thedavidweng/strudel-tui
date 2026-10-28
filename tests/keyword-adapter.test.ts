@@ -78,6 +78,21 @@ describe('KeywordAdapter', () => {
       expect(response.message).toContain('No pattern');
     });
 
+    test('"validate" on a pattern reports that it is valid', async () => {
+      patterns.set('s("bd sn")');
+      const response = await adapter.processMessage('validate');
+      expect(response.action).toBe('validate');
+      expect(response.error).toBeUndefined();
+      expect(response.pattern).toContain('s("bd sn")');
+    });
+
+    test('"check" on a broken pattern reports the error', async () => {
+      patterns.set('s("bd');
+      const response = await adapter.processMessage('check');
+      expect(response.action).toBe('validate');
+      expect(response.error).toBeDefined();
+    });
+
     test('"undo" with no history returns nothing to undo', async () => {
       const response = await adapter.processMessage('undo');
       expect(response.action).toBe('undo');
@@ -175,5 +190,17 @@ describe('KeywordAdapter', () => {
       expect(response.action).toBe('load');
       expect(response.error).toBeDefined();
     });
+  });
+
+  test('a tool that throws becomes an error response', async () => {
+    const failing = {
+      executeTool: async () => {
+        throw new Error('boom');
+      },
+    } as unknown as ToolExecutor;
+    const broken = new KeywordAdapter(failing, patterns);
+    const response = await broken.processMessage('stop');
+    expect(response.action).toBe('error');
+    expect(response.error).toBe('boom');
   });
 });
