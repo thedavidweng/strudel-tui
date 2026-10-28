@@ -126,6 +126,51 @@ describe('BrowserBridge', () => {
     expect(statuses.some((s) => s.type === 'disconnected')).toBe(true);
   });
 
+  test('unknown paths are not found', async () => {
+    const res = await fetch(bridge.url + 'missing');
+    expect(res.status).toBe(404);
+  });
+
+  test('a second tab replaces the first', async () => {
+    const html = await (await fetch(bridge.url)).text();
+    const token = html.match(/token=([0-9a-f]+)/)![1];
+    const wsUrl = `${bridge.url.replace('http', 'ws')}ws?token=${token}`;
+    const first = await connect(wsUrl);
+    const second = await connect(wsUrl);
+    await sleep(50);
+
+    expect(first.readyState).toBe(WebSocket.CLOSED);
+    expect(bridge.hasClient).toBe(true);
+    second.close();
+  });
+
+  test('stop() tells a ready client to stop', async () => {
+    const html = await (await fetch(bridge.url)).text();
+    const token = html.match(/token=([0-9a-f]+)/)![1];
+    const ws = await connect(`${bridge.url.replace('http', 'ws')}ws?token=${token}`);
+    ws.send(JSON.stringify({ type: 'ready' }));
+    await sleep(50);
+
+    const incoming = nextMessage(ws);
+    bridge.stop();
+    expect(await incoming).toEqual({ type: 'stop' });
+    ws.close();
+  });
+
+  test('playing and stopped messages update status', async () => {
+    const html = await (await fetch(bridge.url)).text();
+    const token = html.match(/token=([0-9a-f]+)/)![1];
+    const ws = await connect(`${bridge.url.replace('http', 'ws')}ws?token=${token}`);
+    ws.send(JSON.stringify({ type: 'playing' }));
+    await sleep(50);
+    ws.send(JSON.stringify({ type: 'stopped' }));
+    await sleep(50);
+
+    expect(statuses.some((s) => s.type === 'playing')).toBe(true);
+    expect(statuses.some((s) => s.type === 'stopped')).toBe(true);
+    ws.close();
+  });
+
   test('playback errors from the page are surfaced', async () => {
     const html = await (await fetch(bridge.url)).text();
     const token = html.match(/token=([0-9a-f]+)/)![1];

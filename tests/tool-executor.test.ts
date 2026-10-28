@@ -151,5 +151,62 @@ describe('ToolExecutor', () => {
       const result = await ex.executeTool('stop_playback', {});
       expect(result).toContain('stopped');
     });
+
+    test('play_pattern with invalid code does not change the pattern', async () => {
+      const result = await executor.executeTool('play_pattern', { code: 's("bd sn"' });
+      expect(result).toContain('Invalid');
+      expect(patterns.currentPattern).toBe('');
+    });
+
+    test('play_pattern explains when the browser must enable audio', async () => {
+      const audio = createMockAudio();
+      audio.play = async () => 'awaiting-browser';
+      const ex = new ToolExecutor(new PatternOwner(''), audio);
+      const result = await ex.executeTool('play_pattern', { code: 's("bd")' });
+      expect(result).toContain('Enable audio');
+    });
+
+    test('play_pattern reports audio failures', async () => {
+      const audio = createMockAudio();
+      audio.play = async () => {
+        throw new Error('no device');
+      };
+      const ex = new ToolExecutor(new PatternOwner(''), audio);
+      const result = await ex.executeTool('play_pattern', { code: 's("bd")' });
+      expect(result).toContain('Audio playback failed');
+      expect(result).toContain('no device');
+    });
+
+    test('stop_playback still stops when audio.stop() throws', async () => {
+      const audio = createMockAudio();
+      audio.stop = async () => {
+        throw new Error('device gone');
+      };
+      const ex = new ToolExecutor(new PatternOwner(''), audio);
+      const result = await ex.executeTool('stop_playback', {});
+      expect(result).toContain('stopped');
+    });
+  });
+
+  describe('save_pattern tool', () => {
+    test('with no pattern reports nothing to save', async () => {
+      const result = await executor.executeTool('save_pattern', { name: 'draft' });
+      expect(result).toBe('No pattern to save.');
+    });
+
+    test('rejects an invalid name', async () => {
+      patterns.set('s("bd")');
+      const result = await executor.executeTool('save_pattern', { name: '../bad' });
+      expect(result).toContain('Invalid pattern name');
+    });
+  });
+
+  describe('edit_pattern validation', () => {
+    test('rejects an instruction that produces invalid code', async () => {
+      patterns.set('s("bd');
+      const result = await executor.executeTool('edit_pattern', { instruction: 'faster' });
+      expect(result).toContain('invalid');
+      expect(patterns.currentPattern).toBe('s("bd');
+    });
   });
 });

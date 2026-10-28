@@ -286,3 +286,56 @@ describe('render in edit mode', () => {
     expect(allText).not.toContain('Save&Exit');
   });
 });
+
+describe('render edges', () => {
+  test('highlights a comment', () => {
+    const panel = new PatternPanel();
+    panel.setPattern('s("bd") // hats');
+    const text = panel.render(80).map(stripAnsi).join('\n');
+    expect(text).toContain('// hats');
+  });
+
+  test('shows playing in the title', () => {
+    const panel = new PatternPanel();
+    panel.setPattern('s("bd")');
+    panel.setPlaying(true);
+    const text = panel.render(80).map(stripAnsi).join('\n');
+    expect(text).toContain('playing');
+  });
+
+  test('shows an empty pattern placeholder', () => {
+    const panel = new PatternPanel();
+    const text = panel.render(40).map(stripAnsi).join('\n');
+    expect(text).toContain('(no pattern)');
+  });
+
+  test('setInvalidate runs when the pattern changes', () => {
+    const panel = new PatternPanel();
+    let calls = 0;
+    panel.setInvalidate(() => {
+      calls++;
+    });
+    panel.setPattern('s("bd")');
+    expect(calls).toBe(1);
+  });
+
+  test('edit view scrolls to keep the cursor on screen', () => {
+    const panel = new PatternPanel();
+    panel.setPattern(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].join('\n'));
+    panel.enterEditMode();
+    const bottom = panel.render(40, 4).map(stripAnsi).join('\n');
+    expect(bottom).toContain('h');
+    for (let i = 0; i < 20; i++) panel.handleInput('\x1b[A');
+    const top = panel.render(40, 4).map(stripAnsi).join('\n');
+    expect(top).toContain('a');
+  });
+
+  test('a narrow panel truncates a long line', () => {
+    const panel = new PatternPanel();
+    const pattern = `s("bd sn hh cp")${'.gain(0.5)'.repeat(8)}`;
+    panel.setPattern(pattern);
+    const text = panel.render(20).map(stripAnsi).join('\n');
+    expect(text).not.toContain(pattern);
+    expect(text).toContain('…');
+  });
+});

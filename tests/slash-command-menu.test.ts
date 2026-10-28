@@ -69,6 +69,23 @@ describe('SlashCommandMenu', () => {
       expect(menu.visible).toBe(false);
     });
 
+    test('whitespace-only filter lists every command', () => {
+      menu.setFilter('/play');
+      const all = menu.length;
+      menu.setFilter('   ');
+      expect(menu.length).toBeGreaterThanOrEqual(all);
+      expect(menu.visible).toBe(true);
+    });
+
+    test('setInvalidate runs when the filter changes', () => {
+      let calls = 0;
+      menu.setInvalidate(() => {
+        calls++;
+      });
+      menu.setFilter('/play');
+      expect(calls).toBe(1);
+    });
+
     test('no match returns empty', () => {
       menu.setFilter('/zzzznonexistent');
       expect(menu.length).toBe(0);
