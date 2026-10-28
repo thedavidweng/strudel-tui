@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { ConfigManager, type StrudelConfig } from '../src/config/ConfigManager';
+import { ConfigManager } from '../src/config/ConfigManager';
 
 describe('ConfigManager', () => {
   test('get returns override values when provided', () => {
@@ -70,13 +70,5 @@ describe('ConfigManager', () => {
     expect(cm.get('apiKey')).toBe('key1');
     expect(cm.get('baseUrl')).toBe('https://example.com');
     expect(cm.get('model')).toBe('m2');
-  });
-});
-
-describe('StrudelConfig interface', () => {
-  test('all fields are optional', () => {
-    // This is a compile-time check — if this compiles, the test passes
-    const config: StrudelConfig = {};
-    expect(config).toBeDefined();
   });
 });

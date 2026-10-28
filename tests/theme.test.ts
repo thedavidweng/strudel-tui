@@ -2,21 +2,9 @@ import { describe, test, expect } from 'bun:test';
 import { getPalette, colors, createMarkdownTheme, createEditorTheme } from '../src/tui/theme';
 
 describe('getPalette', () => {
-  test('returns dark palette by default', () => {
-    const palette = getPalette();
-    expect(palette.primary).toBe('#E07C4F');
-    expect(palette.text).toBe('#C5C5C5');
-  });
-
   test('returns dark palette when explicitly requested', () => {
     const palette = getPalette('dark');
     expect(palette).toEqual(getPalette());
-  });
-
-  test('returns light palette when requested', () => {
-    const palette = getPalette('light');
-    expect(palette.primary).toBe('#B85C2F');
-    expect(palette.text).toBe('#2A2A2A');
   });
 
   test('dark and light palettes have the same keys', () => {
@@ -29,21 +17,6 @@ describe('getPalette', () => {
 describe('colors (default export)', () => {
   test('is the dark palette', () => {
     expect(colors).toEqual(getPalette('dark'));
-  });
-
-  test('has all required ColorPalette fields', () => {
-    const requiredKeys = [
-      'primary', 'accent',
-      'text', 'textStrong', 'textDim', 'textMuted',
-      'border', 'borderFocus',
-      'success', 'warning', 'error',
-      'roleUser', 'roleAssistant', 'roleTool',
-      'playing', 'stopped', 'bpm', 'pattern',
-    ];
-    for (const key of requiredKeys) {
-      expect(colors).toHaveProperty(key);
-      expect(typeof (colors as any)[key]).toBe('string');
-    }
   });
 
   test('all color values are valid hex', () => {

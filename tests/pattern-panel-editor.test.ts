@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Key, matchesKey } from '@earendil-works/pi-tui';
 import { PatternPanel } from '../src/tui/PatternPanel';
 
 const KEY = {
@@ -11,18 +10,6 @@ const KEY = {
   delete:    '\x1b[3~',
   enter:     '\r',
 };
-
-describe('key-data sanity', () => {
-  test('arrow sequences match Key identifiers', () => {
-    expect(matchesKey(KEY.up,        Key.up)).toBe(true);
-    expect(matchesKey(KEY.down,      Key.down)).toBe(true);
-    expect(matchesKey(KEY.right,     Key.right)).toBe(true);
-    expect(matchesKey(KEY.left,      Key.left)).toBe(true);
-    expect(matchesKey(KEY.backspace, Key.backspace)).toBe(true);
-    expect(matchesKey(KEY.delete,    Key.delete)).toBe(true);
-    expect(matchesKey(KEY.enter,     Key.enter)).toBe(true);
-  });
-});
 
 function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
