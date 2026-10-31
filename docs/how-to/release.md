@@ -30,12 +30,10 @@ or dispatch Release with the same existing tag. Do not remove assets from a
 completed release or change the tag to retry a partial upload. See the
 [GoReleaser release options](https://goreleaser.com/customization/publish/scm/).
 
-The Homebrew tap owns cask updates: its scheduled **Sync Releases** workflow
-reads public release assets and writes its own repository with its own
-`GITHUB_TOKEN`, as it does for Apple Say. Strudel does not push to the tap and
-needs neither `RELEASE_PLEASE_TOKEN` nor `HOMEBREW_TAP_GITHUB_TOKEN`. The first
-Strudel cask must be added after real macOS release assets and their SHA-256
-digests exist; never publish placeholder checksums.
+The Homebrew tap owns cask updates: its scheduled **Update casks** workflow
+checks public releases and opens a pull request for each update. Strudel does
+not push to the tap and needs neither `RELEASE_PLEASE_TOKEN` nor
+`HOMEBREW_TAP_GITHUB_TOKEN`.
 
 ## macOS signing and notarization
 
