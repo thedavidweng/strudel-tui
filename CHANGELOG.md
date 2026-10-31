@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.3](https://github.com/thedavidweng/strudel-tui/compare/v0.2.2...v0.2.3) (2026-10-31)
+
+
+### Documentation
+
+* update Homebrew release process ([#65](https://github.com/thedavidweng/strudel-tui/issues/65)) ([2b4e81d](https://github.com/thedavidweng/strudel-tui/commit/2b4e81dd5c73a353d9d1d6e0c32a4a3db2d6fa87))
+
 ## [0.2.2](https://github.com/thedavidweng/strudel-tui/compare/v0.2.1...v0.2.2) (2026-10-26)
 
 
