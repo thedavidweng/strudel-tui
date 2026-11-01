@@ -31,9 +31,10 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -euo pipefail
+          target="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
           gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
             -f "ref=refs/tags/release-token-test-$GITHUB_RUN_ID" \
-            -f "sha=$GITHUB_SHA" --silent
+            -f "sha=$target" --silent
   tag-event:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
