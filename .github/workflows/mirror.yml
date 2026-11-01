@@ -2,11 +2,19 @@ name: Release token access check
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'release-token-test-*'
 
 permissions: {}
 
+concurrency:
+  group: release-token-test-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -18,3 +26,17 @@ jobs:
           test -n "$GH_TOKEN"
           test "$(gh api user --jq .login)" = "$GITHUB_REPOSITORY_OWNER"
           gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push' | grep -Fx true
+      - name: Create isolated test tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/release-token-test-$GITHUB_RUN_ID" \
+            -f "sha=$GITHUB_SHA" --silent
+  tag-event:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo 'The release token triggered a tag workflow.'
